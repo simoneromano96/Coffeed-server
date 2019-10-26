@@ -1,0 +1,37 @@
+[package]
+name = "coffeed-server"
+version = "0.1.0"
+authors = ["Simone Romano <simoneromano@protonmail.ch>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Webserver
+actix-web = "1.0.8"
+# CORS
+actix-cors = "0.1.0"
+# File serving
+actix-files = "0.1.6"
+# File upload multipart
+actix-multipart = "0.1.4"
+# GraphQL
+juniper = "0.14.1"
+# SDL to Juniper
+juniper-from-schema = "0.5.0"
+# Serde for serialisation/deserialisation
+serde = "1.0.101"
+serde_json = "1.0.41"
+serde_derive = "1.0.101"
+# MongoDB
+# Client
+mongodb = "0.4.0"
+# Other dependencies
+futures = "0.1.29"
+pretty_env_logger = "0.3.1"
+# uuid = { version = "0.8.1", features = ["serde", "v4"] }
+nanoid = "0.2.0"
+chrono = "0.4.9"
+# Password Hash
+argonautica = { version = "0.2", features = ["serde", "simd"] }
+# derive_builder = "0.8.0"
