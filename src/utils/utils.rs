@@ -1,4 +1,6 @@
 use argonautica::{Hasher, Verifier};
+use jsonwebtoken::{encode, Header};
+use serde_derive::{Deserialize, Serialize};
 
 pub struct PasswordHasher {
     hasher: Hasher<'static>,

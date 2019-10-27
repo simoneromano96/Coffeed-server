@@ -1,4 +1,5 @@
 use crate::routes::upload;
+use crate::utils::{create_token, PasswordHasher};
 use actix_web::{web, Error, HttpResponse};
 use chrono::{NaiveDateTime, Utc};
 use futures::Future;
@@ -54,11 +55,39 @@ impl CoffeeFields for Coffee {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct Coffees {
+    pub coffees: Vec<Coffee>,
+}
+
+impl CoffeesFields for Coffees {
+    fn field_coffees(
+        &self,
+        _: &Executor<'_, Context>,
+        _parent: &juniper_from_schema::QueryTrail<Coffee, juniper_from_schema::Walked>,
+    ) -> FieldResult<&Vec<Coffee>> {
+        Ok(&self.coffees)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Jwt {
+    pub jwt: String,
+}
+
+impl JwtFields for Jwt {
+    fn field_jwt(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
+        Ok(&self.jwt)
+    }
+}
+
+//#[derive(Serialize, Deserialize)]
 pub struct BaseResponse {
     pub error: bool,
     pub status_code: i32,
     pub timestamp: NaiveDateTime,
     pub message: String,
+    pub data: Option<BaseResponseData>,
 }
 
 impl BaseResponseFields for BaseResponse {
@@ -73,6 +102,13 @@ impl BaseResponseFields for BaseResponse {
     }
     fn field_message(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
         Ok(&self.message)
+    }
+    fn field_data(
+        &self,
+        _: &Executor<'_, Context>,
+        _parent: &juniper_from_schema::QueryTrail<BaseResponseData, juniper_from_schema::Walked>,
+    ) -> FieldResult<&Option<BaseResponseData>> {
+        Ok(&self.data)
     }
 }
 
@@ -126,8 +162,8 @@ impl QueryFields for Query {
     fn field_coffees(
         &self,
         executor: &Executor<'_, Context>,
-        _parent: &juniper_from_schema::QueryTrail<Coffee, juniper_from_schema::Walked>,
-    ) -> FieldResult<Vec<Coffee>> {
+        _parent: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
+    ) -> FieldResult<BaseResponse> {
         // 1. Get context
         let context = executor.context();
         // 2. Get the db Connection
@@ -139,23 +175,35 @@ impl QueryFields for Query {
         // 6. Find coffees
         let coffees = collection.find(None, None).expect("Document not found");
         // 7. Deserialize the document into a Coffee instance
-        let mut result: Vec<Coffee> = Vec::new();
+        let mut result: Coffees = Coffees {
+            coffees: Vec::new(),
+        };
         for coffee_document in coffees {
             if let Ok(item) = coffee_document {
                 let coffee: Coffee = bson::from_bson(bson::Bson::Document(item))?;
-                result.push(coffee);
+                // info!("{:?}", coffee);
+                result.coffees.push(coffee);
             }
         }
-        Ok(result)
+        // 8. Create response
+        let response: BaseResponse = BaseResponse {
+            error: false,
+            status_code: 200,
+            timestamp: Utc::now().naive_utc(),
+            message: String::from("Created successfully"),
+            data: Some(BaseResponseData::from(result)),
+        };
+
+        Ok(response)
     }
 
     // TODO Handle error!
     fn field_coffee(
         &self,
         executor: &juniper::Executor<'_, Context>,
-        _parent: &juniper_from_schema::QueryTrail<Coffee, juniper_from_schema::Walked>,
+        _parent: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
         id: juniper::ID,
-    ) -> FieldResult<Coffee> {
+    ) -> FieldResult<BaseResponse> {
         // 1. Get context
         let context = executor.context();
         // 2. Get the db Connection
@@ -172,7 +220,15 @@ impl QueryFields for Query {
             .expect("Document not found");
         // 7. Deserialize the document into a Coffee instance
         let result: Coffee = bson::from_bson(bson::Bson::Document(result_document))?;
-        Ok(result)
+        // 8. Create response
+        let response: BaseResponse = BaseResponse {
+            error: false,
+            status_code: 200,
+            timestamp: Utc::now().naive_utc(),
+            message: String::from("Created successfully"),
+            data: Some(BaseResponseData::from(result)),
+        };
+        Ok(response)
     }
 }
 
@@ -214,12 +270,13 @@ impl MutationFields for Mutation {
             status_code: 200,
             timestamp: Utc::now().naive_utc(),
             message: String::from("Created successfully"),
+            data: Some(BaseResponseData::from(new_coffee)),
         };
 
         Ok(response)
     }
 
-    // TODO Handle error!
+    // TODO Make a generic response handler
     fn field_update_coffee(
         &self,
         executor: &Executor<'_, Context>,
@@ -238,17 +295,31 @@ impl MutationFields for Mutation {
         let oid = ObjectId::with_string(&data.id).expect("Id not valid");
         // 6. Serialize
         let bson = bson::to_bson(&data)?;
-        // 7. Update
-        if let bson::Bson::Document(document) = bson {
-            // Update
-            collection.find_one_and_update(doc! {"_id":  oid}, doc! { "$set": document }, None)?;
-        }
-        // 8. Create response
-        let response: BaseResponse = BaseResponse {
-            error: false,
+        // 7. Prepare a deserialized variable
+        let result: Coffee;
+        // 8. Base error response
+        let mut response: BaseResponse = BaseResponse {
+            error: true,
             status_code: 200,
             timestamp: Utc::now().naive_utc(),
             message: String::from("Updated successfully"),
+            data: None,
+        };
+        // 8. Update
+        if let bson::Bson::Document(document) = bson {
+            let document = collection
+                .find_one_and_update(doc! {"_id":  oid}, doc! { "$set": document }, None)
+                .unwrap()
+                .unwrap();
+            result = bson::from_bson(bson::Bson::Document(document)).unwrap();
+
+            response = BaseResponse {
+                error: true,
+                status_code: 200,
+                timestamp: Utc::now().naive_utc(),
+                message: String::from("Updated successfully"),
+                data: Some(BaseResponseData::from(result)),
+            };
         };
 
         Ok(response)
@@ -272,15 +343,63 @@ impl MutationFields for Mutation {
         // 5. Convert objectId
         // let oid = ObjectId::with_string(&id).expect("Id not valid");
         // 6. Find and delete coffee
-        collection
-            .find_one_and_delete(doc! { "_id":  id.to_string() }, None)?
-            .expect("Document not found");
+        let result: Coffee = bson::from_bson(bson::Bson::Document(
+            collection
+                .find_one_and_delete(doc! { "_id":  id.to_string() }, None)
+                .unwrap()
+                .unwrap(),
+        ))
+        .unwrap();
         // 7. Create response
         let response: BaseResponse = BaseResponse {
             error: false,
             status_code: 200,
             timestamp: Utc::now().naive_utc(),
             message: String::from("Updated successfully"),
+            data: Some(BaseResponseData::from(result)),
+        };
+
+        Ok(response)
+    }
+
+    fn field_login(
+        &self,
+        executor: &juniper::Executor<'_, Context>,
+        _parent: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
+        data: UserInput,
+    ) -> FieldResult<BaseResponse> {
+        // 1. Get context
+        let context = executor.context();
+        // 2. Get the db Connection
+        let connection: Client = context.db_client.clone();
+        // 3. Get the db
+        let database = connection.db("coffeed");
+        // 4. Get collection
+        let collection: Collection = database.collection("users");
+        // 5. Find user by username
+        let result_document = collection
+            .find_one(Some(doc! {"username": data.username}), None)
+            .unwrap()
+            .unwrap();
+        // 6. Deserialize the document into a Coffee instance
+        let user: User = bson::from_bson(bson::Bson::Document(result_document))?;
+        // 7. Create the password hasher
+        let mut password_hasher = PasswordHasher::build();
+        // 8. Verify password
+        password_hasher
+            .verify(user.password, data.password)
+            .unwrap();
+        // 9. Create token
+        let token: Jwt = Jwt {
+            jwt: create_token(user.username),
+        };
+        // 10. Create response
+        let response: BaseResponse = BaseResponse {
+            error: false,
+            status_code: 200,
+            timestamp: Utc::now().naive_utc(),
+            message: String::from("Updated successfully"),
+            data: Some(BaseResponseData::from(token)),
         };
 
         Ok(response)

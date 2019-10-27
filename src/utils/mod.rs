@@ -1,3 +1,3 @@
 pub mod utils;
 
-pub use utils::PasswordHasher;
+pub use utils::{create_token, PasswordHasher};

@@ -5,18 +5,6 @@ schema {
 
 scalar DateTimeUtc @juniper(with_time_zone: false)
 
-# enum UserType {
-#   Admin
-#   Customer
-# }
-
-type BaseResponse {
-  error: Boolean!
-  statusCode: Int!
-  timestamp: DateTimeUtc!
-  message: String!
-}
-
 type Coffee {
   id: ID! @juniper(ownership: "owned")
   name: String!
@@ -25,12 +13,36 @@ type Coffee {
   description: String
 }
 
+type Coffees {
+  coffees: [Coffee!]!
+}
+
 type User {
   id: ID! @juniper(ownership: "owned")
   username: String!
   email: String!
   password: String!
   userType: String! # TODO: Use enum
+}
+
+type Jwt {
+  jwt: String!
+}
+
+# type Claims {
+#   iss: String!
+#   sub: String!
+#   exp: Int!
+# }
+
+union BaseResponseData = Coffee | Coffees | Jwt
+
+type BaseResponse {
+  error: Boolean!
+  statusCode: Int!
+  timestamp: DateTimeUtc!
+  message: String!
+  data: BaseResponseData
 }
 
 input CoffeeInput {
@@ -55,14 +67,19 @@ input UserInput {
 }
 
 type Query {
-  coffees: [Coffee!]! @juniper(ownership: "owned")
-  coffee(id: ID!): Coffee! @juniper(ownership: "owned")
+  coffees: BaseResponse! @juniper(ownership: "owned")
+  coffee(id: ID!): BaseResponse! @juniper(ownership: "owned")
 }
 
 type Mutation {
-  #createCoffee(name: String!, price: Float!, description: String): Coffee! @juniper(ownership: "owned")
   createCoffee(data: CoffeeInput!): BaseResponse! @juniper(ownership: "owned")
   updateCoffee(data: UpdateCoffeeInput!): BaseResponse!
     @juniper(ownership: "owned")
   deleteCoffee(id: ID!): BaseResponse! @juniper(ownership: "owned")
+  login(data: UserInput!): BaseResponse! @juniper(ownership: "owned")
 }
+
+# enum UserType {
+#   Admin
+#   Customer
+# }
