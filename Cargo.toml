@@ -11,6 +11,8 @@ edition = "2018"
 actix-web = "1.0.8"
 # CORS
 actix-cors = "0.1.0"
+# Cross Site Request Forgery
+csrf = "0.3.1"
 # File serving
 actix-files = "0.1.6"
 # File upload multipart
@@ -28,10 +30,16 @@ serde_derive = "1.0.101"
 mongodb = "0.4.0"
 # Other dependencies
 futures = "0.1.29"
+# Logging
+log = "0.4.8"
 pretty_env_logger = "0.3.1"
 # uuid = { version = "0.8.1", features = ["serde", "v4"] }
 nanoid = "0.2.0"
-chrono = "0.4.9"
-# Password Hash
-argonautica = { version = "0.2", features = ["serde", "simd"] }
+# chrono = "0.4.9"
+chrono = { version = "0.4.9", features = ["serde"] }
 # derive_builder = "0.8.0"
+# Authentication
+# Password Hash (argon2)
+argonautica = { version = "0.2", features = ["serde", "simd"] }
+# JWT
+jsonwebtoken = "6.0.1"
