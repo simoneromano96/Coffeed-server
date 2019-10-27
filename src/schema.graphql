@@ -69,6 +69,7 @@ input UserInput {
 type Query {
   coffees: BaseResponse! @juniper(ownership: "owned")
   coffee(id: ID!): BaseResponse! @juniper(ownership: "owned")
+  login(data: UserInput!): BaseResponse! @juniper(ownership: "owned")
 }
 
 type Mutation {
@@ -76,7 +77,6 @@ type Mutation {
   updateCoffee(data: UpdateCoffeeInput!): BaseResponse!
     @juniper(ownership: "owned")
   deleteCoffee(id: ID!): BaseResponse! @juniper(ownership: "owned")
-  login(data: UserInput!): BaseResponse! @juniper(ownership: "owned")
 }
 
 # enum UserType {

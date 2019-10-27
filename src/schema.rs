@@ -1,5 +1,5 @@
 use crate::routes::upload;
-use crate::utils::{create_token, PasswordHasher};
+use crate::utils::{create_token, hash, verify};
 use actix_web::{web, Error, HttpResponse};
 use chrono::{NaiveDateTime, Utc};
 use futures::Future;
@@ -158,6 +158,48 @@ impl Serialize for UpdateCoffeeInput {
 
 // Query resolvers
 impl QueryFields for Query {
+    fn field_login(
+        &self,
+        executor: &juniper::Executor<'_, Context>,
+        _parent: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
+        data: UserInput,
+    ) -> FieldResult<BaseResponse> {
+        // 1. Get context
+        let context = executor.context();
+        // 2. Get the db Connection
+        let connection: Client = context.db_client.clone();
+        // 3. Get the db
+        let database = connection.db("coffeed");
+        // 4. Get collection
+        let collection: Collection = database.collection("users");
+        // 5. Find user by username
+        let result_document = collection
+            .find_one(
+                Some(doc! { "username": data.username, "email": data.email }),
+                None,
+            )
+            .unwrap()
+            .unwrap();
+        // 6. Deserialize the document into a Coffee instance
+        let user: User = bson::from_bson(bson::Bson::Document(result_document))?;
+        // 7. Verify password
+        verify(user.password, data.password).unwrap();
+        // 8. Create token
+        let token: Jwt = Jwt {
+            jwt: create_token(user.username),
+        };
+        // 9. Create response
+        let response: BaseResponse = BaseResponse {
+            error: false,
+            status_code: 200,
+            timestamp: Utc::now().naive_utc(),
+            message: String::from("Updated successfully"),
+            data: Some(BaseResponseData::from(token)),
+        };
+
+        Ok(response)
+    }
+
     // TODO Handle error!
     fn field_coffees(
         &self,
@@ -190,7 +232,7 @@ impl QueryFields for Query {
             error: false,
             status_code: 200,
             timestamp: Utc::now().naive_utc(),
-            message: String::from("Created successfully"),
+            message: String::from("Got coffees successfully"),
             data: Some(BaseResponseData::from(result)),
         };
 
@@ -305,7 +347,7 @@ impl MutationFields for Mutation {
             message: String::from("Updated successfully"),
             data: None,
         };
-        // 8. Update
+        // 9. Update
         if let bson::Bson::Document(document) = bson {
             let document = collection
                 .find_one_and_update(doc! {"_id":  oid}, doc! { "$set": document }, None)
@@ -357,49 +399,6 @@ impl MutationFields for Mutation {
             timestamp: Utc::now().naive_utc(),
             message: String::from("Updated successfully"),
             data: Some(BaseResponseData::from(result)),
-        };
-
-        Ok(response)
-    }
-
-    fn field_login(
-        &self,
-        executor: &juniper::Executor<'_, Context>,
-        _parent: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
-        data: UserInput,
-    ) -> FieldResult<BaseResponse> {
-        // 1. Get context
-        let context = executor.context();
-        // 2. Get the db Connection
-        let connection: Client = context.db_client.clone();
-        // 3. Get the db
-        let database = connection.db("coffeed");
-        // 4. Get collection
-        let collection: Collection = database.collection("users");
-        // 5. Find user by username
-        let result_document = collection
-            .find_one(Some(doc! {"username": data.username}), None)
-            .unwrap()
-            .unwrap();
-        // 6. Deserialize the document into a Coffee instance
-        let user: User = bson::from_bson(bson::Bson::Document(result_document))?;
-        // 7. Create the password hasher
-        let mut password_hasher = PasswordHasher::build();
-        // 8. Verify password
-        password_hasher
-            .verify(user.password, data.password)
-            .unwrap();
-        // 9. Create token
-        let token: Jwt = Jwt {
-            jwt: create_token(user.username),
-        };
-        // 10. Create response
-        let response: BaseResponse = BaseResponse {
-            error: false,
-            status_code: 200,
-            timestamp: Utc::now().naive_utc(),
-            message: String::from("Updated successfully"),
-            data: Some(BaseResponseData::from(token)),
         };
 
         Ok(response)
