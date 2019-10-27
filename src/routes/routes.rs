@@ -41,7 +41,7 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     };
     Either::B(
         field
-            .fold((file, 0i64), move |(mut file, acc), bytes| {
+            .fold(file, move |mut file, bytes| {
                 // fs operations are blocking, we have to execute writes
                 // on threadpool
                 web::block(move || {
@@ -50,14 +50,14 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                         MultipartError::Payload(error::PayloadError::Io(e))
                     })?;
                     // acc += bytes.len() as i64;
-                    Ok((file, acc))
+                    Ok(file)
                 })
                 .map_err(|e: error::BlockingError<MultipartError>| match e {
                     error::BlockingError::Error(e) => e,
                     error::BlockingError::Canceled => MultipartError::Incomplete,
                 })
             })
-            .map(|(_, acc)| url)
+            .map(|_| url)
             .map_err(|e| {
                 println!("save_file failed, {:?}", e);
                 error::ErrorInternalServerError(e)
