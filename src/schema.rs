@@ -20,6 +20,7 @@ graphql_schema_from_file!("src/schema.graphql");
 
 pub struct Context {
     db_client: Client,
+    //user_id: ObjectId,
 }
 impl juniper::Context for Context {}
 
@@ -186,7 +187,7 @@ impl QueryFields for Query {
         verify(user.password, data.password).unwrap();
         // 8. Create token
         let token: Jwt = Jwt {
-            jwt: create_token(user.username),
+            jwt: create_token(user.username, user.email),
         };
         // 9. Create response
         let response: BaseResponse = BaseResponse {
@@ -422,10 +423,12 @@ fn graphiql() -> HttpResponse {
 fn graphql(
     schema: web::Data<Arc<Schema>>,
     data: web::Json<GraphQLRequest>,
+    //user: User,
     db_client: web::Data<Client>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     let ctx = Context {
         db_client: db_client.get_ref().clone(),
+        //user_id: user.id,
     };
 
     web::block(move || {

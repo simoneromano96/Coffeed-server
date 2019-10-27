@@ -1,4 +1,4 @@
-pub mod auth;
+// pub mod auth;
 pub mod routes;
 pub mod schema;
 pub mod utils;
@@ -133,11 +133,11 @@ fn main() {
             // CORS
             .wrap(
                 Cors::new()
-                    .allowed_origin("ALL")
-                    .allowed_methods(vec!["GET", "POST"])
-                    .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
-                    .allowed_header(header::CONTENT_TYPE)
-                    .max_age(3600),
+                //    .allowed_origin("ALL")
+                //    .allowed_methods(vec!["GET", "POST"])
+                //    .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
+                //    .allowed_header(header::CONTENT_TYPE)
+                //    .max_age(3600),
             )
             .wrap(middleware::Logger::default())
             // Save db_client in Server's state

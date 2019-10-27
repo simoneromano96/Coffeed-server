@@ -1,9 +1,12 @@
 use argonautica::{Hasher, Verifier};
-use jsonwebtoken::{encode, Header};
+use jsonwebtoken::{decode, encode, Header, Validation};
 use serde_derive::{Deserialize, Serialize};
 
 lazy_static::lazy_static! {
     pub static ref SECRET_KEY: String = std::env::var("HASH_SECRET_KEY").unwrap();
+    pub static ref JWT_SECRET: String = std::env::var("JWT_SECRET_KEY").unwrap();
+    pub static ref JWT_ISSUER: String = std::env::var("JWT_ISSUER").unwrap();
+    pub static ref JWT_EXPIRY: i64 = std::env::var("JWT_EXPIRY").unwrap().parse::<i64>().unwrap();
 }
 
 /// Hash password
@@ -35,19 +38,33 @@ pub fn verify(hash: String, password: String) -> Result<bool, String> {
 struct Claims {
     pub iss: String,
     pub sub: String,
-    pub exp: i32,
+    pub company: String,
+    pub exp: i64,
 }
 
-pub fn create_token(username: String) -> String {
-    let jwt_secret = std::env::var("JWT_SECRET_KEY").unwrap();
-    let jwt_issuer = std::env::var("JWT_ISSUER").unwrap();
-    let jwt_expiry = std::env::var("JWT_EXPIRY").unwrap().parse::<i32>().unwrap();
+pub struct SlimUser {
+    pub username: String,
+    pub email: String,
+}
+
+pub fn create_token(username: String, email: String) -> String {
     let headers = Header::default();
     let claims = Claims {
-        iss: jwt_issuer,
+        iss: JWT_ISSUER.to_string(),
         sub: username,
-        exp: jwt_expiry,
+        company: email,
+        exp: (chrono::Local::now() + chrono::Duration::milliseconds(*JWT_EXPIRY)).timestamp(),
     };
 
-    encode(&headers, &claims, jwt_secret.clone().as_bytes()).unwrap()
+    encode(&headers, &claims, JWT_SECRET.clone().as_bytes()).unwrap()
+}
+
+pub fn decode_token(token: &str) -> SlimUser {
+    let data =
+        decode::<Claims>(token, JWT_SECRET.clone().as_bytes(), &Validation::default()).unwrap();
+
+    SlimUser {
+        username: data.claims.sub,
+        email: data.claims.company,
+    }
 }
