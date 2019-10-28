@@ -14,11 +14,7 @@ use mongodb::{
     bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, oid::ObjectId,
     Client, ThreadedClient,
 };
-use pretty_env_logger;
 use std::net::SocketAddr;
-// #[macro_use]
-// extern crate log;
-
 // pub type MongoPool = r2d2::Pool<MongodbConnectionManager>;
 // pub type MongoConnection = r2d2::PooledConnection<MongodbConnectionManager>;
 
@@ -77,6 +73,7 @@ fn init_db(db_client: Client) {
 
 fn main() {
     // TODO: Env file with these values
+    // std::env::set_var("RUST_LOG", "actix_web=info,actix_redis=info");
     std::env::set_var("RUST_LOG", "actix_web=info");
     // This server public address
     std::env::set_var("ACTIX_ADDRESS", "127.0.0.1");
@@ -84,7 +81,7 @@ fn main() {
     // Argon Hash Key
     std::env::set_var("HASH_SECRET_KEY", "secret_key");
     // MongoDB
-    std::env::set_var("MONGODB_HOST", "127.0.0.1");
+    std::env::set_var("MONGODB_HOST", "167.86.100.118");
     std::env::set_var("MONGODB_PORT", "27017");
     std::env::set_var("MONGODB_AUTH_DB", "admin");
     std::env::set_var("MONGODB_AUTH_USERNAME", "username");
@@ -94,6 +91,9 @@ fn main() {
     std::env::set_var("JWT_ISSUER", "coffeed_inc");
     let expiry_time = 24 * 60 * 60 * 1000; // 1 Day in milliseconds
     std::env::set_var("JWT_EXPIRY", expiry_time.to_string());
+    // Redis Sessions
+    // std::env::set_var("REDIS_HOST", "167.86.100.118");
+    // std::env::set_var("REDIS_PORT", "6379");
 
     pretty_env_logger::init();
 
@@ -126,6 +126,10 @@ fn main() {
     );
 
     init_db(db_client.clone());
+
+    // let redis_host = std::env::var("REDIS_HOST").unwrap();
+    // let redis_port = std::env::var("REDIS_PORT").unwrap();
+    // let redis_uri = format!("{}:{}", redis_host, redis_port);
 
     // Start http server
     HttpServer::new(move || {

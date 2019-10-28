@@ -15,12 +15,10 @@ use mongodb::{
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
-
 graphql_schema_from_file!("src/schema.graphql");
 
 pub struct Context {
     db_client: Client,
-    //user_id: ObjectId,
 }
 impl juniper::Context for Context {}
 
@@ -345,7 +343,7 @@ impl MutationFields for Mutation {
             error: true,
             status_code: 200,
             timestamp: Utc::now().naive_utc(),
-            message: String::from("Updated successfully"),
+            message: String::from("Error"),
             data: None,
         };
         // 9. Update
@@ -428,7 +426,6 @@ fn graphql(
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     let ctx = Context {
         db_client: db_client.get_ref().clone(),
-        //user_id: user.id,
     };
 
     web::block(move || {
