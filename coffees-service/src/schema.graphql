@@ -25,9 +25,9 @@ type User {
   userType: String! # TODO: Use enum
 }
 
-type Jwt {
-  jwt: String!
-}
+# type Jwt {
+#   jwt: String!
+# }
 
 # type Claims {
 #   iss: String!
@@ -35,8 +35,7 @@ type Jwt {
 #   exp: Int!
 # }
 
-union BaseResponseData = Coffee | Coffees | Jwt
-
+union BaseResponseData = Coffee | Coffees # | Jwt
 type BaseResponse {
   error: Boolean!
   statusCode: Int!
@@ -60,16 +59,16 @@ input UpdateCoffeeInput {
   description: String
 }
 
-input UserInput {
-  username: String!
-  email: String!
-  password: String!
-}
+# input UserInput {
+#   username: String!
+#   email: String!
+#   password: String!
+# }
 
 type Query {
   coffees: BaseResponse! @juniper(ownership: "owned")
   coffee(id: ID!): BaseResponse! @juniper(ownership: "owned")
-  login(data: UserInput!): BaseResponse! @juniper(ownership: "owned")
+  # login(data: UserInput!): BaseResponse! @juniper(ownership: "owned")
 }
 
 type Mutation {
