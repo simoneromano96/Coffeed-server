@@ -1,6 +1,7 @@
 version: "3.6"
 
 services:
+  # TODO: Create an alpine dockerimage
   mongo:
     image: mongo
     restart: unless-stopped
@@ -12,6 +13,7 @@ services:
     volumes:
       - ./mongo:/data/db
 
+  # TODO: Switch to custom alpine nosqlclient (ex-mongoclient) (url: https://hub.docker.com/r/mongoclient/mongoclient/dockerfile)
   mongo-express:
     image: mongo-express
     restart: unless-stopped
@@ -22,7 +24,7 @@ services:
       ME_CONFIG_MONGODB_ADMINPASSWORD: password
 
   redis:
-    image: redis
+    image: redis:alpine
     restart: unless-stopped
     ports:
       - 6379:6379
