@@ -26,3 +26,17 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
+
+  coffees-service:
+    build:
+      context: ./coffees-service
+      dockerfile: ./coffees-service/.docker/coffees-service.dockerfile
+    env_file:
+      - ./coffees-service/.env
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: ./auth-service/.docker/auth-service.dockerfile
+    env_file:
+      - ./auth-service/.env

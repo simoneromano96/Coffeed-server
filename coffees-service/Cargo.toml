@@ -1,5 +1,5 @@
 [package]
-name = "coffeed-server"
+name = "coffees-service"
 version = "0.1.0"
 authors = ["Simone Romano <simoneromano@protonmail.ch>"]
 edition = "2018"

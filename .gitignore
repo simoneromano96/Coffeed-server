@@ -14,3 +14,6 @@ mongo/
 
 # IntelliJ
 .idea/
+
+# Production environment
+.env.production

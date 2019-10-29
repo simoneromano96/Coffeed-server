@@ -1,0 +1,42 @@
+version: "3.6"
+
+services:
+  mongo:
+    image: mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: username
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - 27017:27017
+    volumes:
+      - ./mongo:/data/db
+
+  mongo-express:
+    image: mongo-express
+    restart: unless-stopped
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: username
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password
+
+  redis:
+    image: redis
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+
+  coffees-service:
+    build:
+      context: ./coffees-service
+      dockerfile: ./coffees-service/.docker/coffees-service.dockerfile
+    env_file:
+      - ./coffees-service/.env.example
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: ./auth-service/.docker/auth-service.dockerfile
+    env_file:
+      - ./auth-service/.env.example
