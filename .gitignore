@@ -17,3 +17,4 @@ mongo/
 
 # Production environment
 .env.production
+.env

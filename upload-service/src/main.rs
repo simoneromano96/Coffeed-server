@@ -3,18 +3,28 @@ use actix_web::http::header::ContentDisposition;
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
 use futures::future::{err, Either};
 use futures::{Future, Stream};
+use lazy_static;
 use nanoid;
 use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
+use url::Url;
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
     pub static ref PRIVATE_HOSTNAME: String = std::env::var("PRIVATE_HOSTNAME").unwrap();
-    pub static ref PUBLIC_HOSTNAME: String = std::env::var("PUBLIC_HOSTNAME").unwrap();
+    pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
-    pub static ref STATIC_ROUTE: String = std::env::var("STATIC_ROUTE").unwrap();
+    pub static ref PUBLIC_ROUTE: String = std::env::var("PUBLIC_ROUTE").unwrap();
     pub static ref UPLOAD_ROUTE: String = std::env::var("UPLOAD_ROUTE").unwrap();
-    pub static ref PUBLIC_FOLDER: String = std::env::var("PUBLIC_FOLDER").unwrap();
+    pub static ref ABSOLUTE_PUBLIC_FOLDER: PathBuf = absolute_path_public_folder(std::env::var("PUBLIC_FOLDER").unwrap());
+}
+
+fn absolute_path_public_folder(public_folder: String) -> PathBuf {
+    let mut absolute_path: PathBuf = std::env::current_dir().unwrap();
+    let relative_path: &str = &public_folder;
+    absolute_path.push(relative_path);
+    absolute_path
 }
 
 pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
@@ -23,15 +33,20 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     let splitted: Vec<&str> = filename.split('.').collect(); // [filename, extension]
     let file_extension: &str = splitted.last().unwrap(); // extension
     let uploaded_filename: String = format!("{}.{}", nanoid::simple(), file_extension);
+    // Create url
     let url: String = format!(
-        "{}/{}/{}",
-        PUBLIC_HOSTNAME.to_owned(),
-        STATIC_ROUTE.to_owned(),
+        "{}{}{}/{}",
+        PUBLIC_BASE_URL.to_owned(),
+        API_ROUTE.to_owned(),
+        PUBLIC_ROUTE.to_owned(),
         uploaded_filename
     );
+    let file_url: Url = Url::parse(&url).unwrap();
 
-    let file_path_string = format!("src/public/uploads/{}", uploaded_filename);
-    let file = match fs::File::create(file_path_string) {
+    // Local filepath
+    let mut file_path: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
+    file_path.push(uploaded_filename);
+    let file = match fs::File::create(file_path) {
         Ok(file) => file,
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     };
@@ -41,10 +56,8 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                 // fs operations are blocking, we have to execute writes
                 // on threadpool
                 web::block(move || {
-                    file.write_all(bytes.as_ref()).map_err(|e| {
-                        println!("file.write_all failed: {:?}", e);
-                        MultipartError::Payload(error::PayloadError::Io(e))
-                    })?;
+                    file.write_all(bytes.as_ref())
+                        .map_err(|e| MultipartError::Payload(error::PayloadError::Io(e)))?;
                     // acc += bytes.len() as i64;
                     Ok(file)
                 })
@@ -53,11 +66,8 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                     error::BlockingError::Canceled => MultipartError::Incomplete,
                 })
             })
-            .map(|_| url)
-            .map_err(|e| {
-                println!("save_file failed, {:?}", e);
-                error::ErrorInternalServerError(e)
-            }),
+            .map(|_| file_url.into_string())
+            .map_err(error::ErrorInternalServerError),
     )
 }
 
@@ -67,7 +77,7 @@ pub fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = 
         .map(|field| save_file(field).into_stream())
         .flatten()
         .collect()
-        .map(|sizes| HttpResponse::Ok().json(sizes))
+        .map(|filepaths| HttpResponse::Ok().json(filepaths))
         .map_err(|e| {
             println!("failed: {}", e);
             e
@@ -75,9 +85,12 @@ pub fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = 
 }
 
 fn create_public_folder() {
-    let path: &str = &PUBLIC_FOLDER;
+    let absolute_path: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
     // Recursive won't fail if the folders already exist
-    fs::DirBuilder::new().recursive(true).create(path).unwrap();
+    fs::DirBuilder::new()
+        .recursive(true)
+        .create(absolute_path)
+        .unwrap();
 }
 
 fn init() {
@@ -92,8 +105,7 @@ fn main() -> std::io::Result<()> {
     let address: std::net::SocketAddrV4 = PRIVATE_HOSTNAME.parse().unwrap();
 
     HttpServer::new(|| {
-        // Get public folder as String
-        let public_folder = PUBLIC_FOLDER.parse::<String>().unwrap();
+        let public_folder: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
         App::new().wrap(middleware::Logger::default()).service(
             // Group routes by API_ROUTE
             web::scope(&API_ROUTE)
@@ -101,7 +113,7 @@ fn main() -> std::io::Result<()> {
                 .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
                 // Serve images from public folder
                 .service(
-                    actix_files::Files::new(&STATIC_ROUTE, public_folder).show_files_listing(),
+                    actix_files::Files::new(&PUBLIC_ROUTE, public_folder).show_files_listing(),
                 ),
         )
     })
