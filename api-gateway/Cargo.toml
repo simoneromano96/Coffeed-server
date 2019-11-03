@@ -13,7 +13,11 @@ futures="^0.1.29"
 actix-http="^0.2.10"
 lazy_static="^1.4.0"
 actix-multipart="^0.1.4"
-reqwest="^0.9.22"
 url="^2.1.0"
 bytes="^0.4.12"
 env_logger = "^0.7.1"
+# Use rust-native tls
+[dependencies.reqwest]
+version="^0.9.22"
+default-features = false
+features=["rustls-tls"]

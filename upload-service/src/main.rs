@@ -29,7 +29,9 @@ fn absolute_path_public_folder(public_folder: String) -> PathBuf {
 
 fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     let content_disposition: ContentDisposition = field.content_disposition().unwrap();
+    println!("Got content_disposition");
     let filename: &str = content_disposition.get_filename().unwrap(); // filename.fake.extension
+    println!("Got filename {:?}", filename);
     let splitted: Vec<&str> = filename.split('.').collect(); // [filename, extension]
     let file_extension: &str = splitted.last().unwrap(); // extension
     let uploaded_filename: String = format!("{}.{}", nanoid::simple(), file_extension);
@@ -42,6 +44,7 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
         uploaded_filename
     );
     let file_url: Url = Url::parse(&url).unwrap();
+    println!("File {:?} will be accessible at {:?}", filename, url);
 
     // Local filepath
     let mut file_path: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
@@ -58,6 +61,7 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                 web::block(move || {
                     file.write_all(bytes.as_ref())
                         .map_err(|e| MultipartError::Payload(error::PayloadError::Io(e)))?;
+                    println!("Wrote {:?} to file", bytes);
                     // acc += bytes.len() as i64;
                     Ok(file)
                 })
@@ -72,6 +76,7 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
 }
 
 fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
+    println!("Upload service got upload request");
     multipart
         .map_err(error::ErrorInternalServerError)
         .map(|field| save_file(field).into_stream())
