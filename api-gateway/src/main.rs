@@ -1,8 +1,8 @@
 use actix_multipart::{Field, Multipart, MultipartError};
-
 use actix_web::http::header::ContentDisposition;
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
 use bytes::Bytes;
+use env_logger;
 use futures::{Future, Stream};
 use reqwest;
 use reqwest::multipart::Part;
@@ -51,12 +51,16 @@ fn upload(
         .flatten()
         .collect()
         .map(|couples: Vec<(Bytes, String)>| {
-            let destination_address: String = UPLOAD_SERVICE_URL.parse::<String>().unwrap();
+            let destination_address: String = format!(
+                "{}{}{}",
+                UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
+                API_ROUTE.parse::<String>().unwrap(),
+                UPLOAD_ROUTE.parse::<String>().unwrap(),
+            );
             let mut request = reqwest::multipart::Form::new();
 
             for field in couples {
-                let bytes: Bytes = field.0;
-                let native_bytes: &[u8] = bytes.as_ref();
+                let native_bytes: &[u8] = field.0.as_ref();
                 let filename: String = field.1.clone();
                 let part: Part = Part::bytes(native_bytes.to_owned());
                 request = request.part(filename, part);
@@ -80,16 +84,19 @@ fn upload(
 fn main() -> std::io::Result<()> {
     //std::env::set_var("RUST_LOG", "actix_http=trace");
     let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
-    // Common http client in state
+    //TODO: Custom http client
     let http_client = Arc::new(Client::new());
+    env_logger::init();
 
     // Start http server
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            // Save db_client in Server's state
             .data(http_client.clone())
-            .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
+            .service(
+                web::scope(&API_ROUTE)
+                    .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload))),
+            )
     })
     .bind(address)?
     .run()
