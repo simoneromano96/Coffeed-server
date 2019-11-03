@@ -12,7 +12,7 @@ use url::Url;
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
-    pub static ref PRIVATE_HOSTNAME: String = std::env::var("PRIVATE_HOSTNAME").unwrap();
+    pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
     pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
     pub static ref PUBLIC_ROUTE: String = std::env::var("PUBLIC_ROUTE").unwrap();
@@ -27,7 +27,7 @@ fn absolute_path_public_folder(public_folder: String) -> PathBuf {
     absolute_path
 }
 
-pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
+fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     let content_disposition: ContentDisposition = field.content_disposition().unwrap();
     let filename: &str = content_disposition.get_filename().unwrap(); // filename.fake.extension
     let splitted: Vec<&str> = filename.split('.').collect(); // [filename, extension]
@@ -52,7 +52,7 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     };
     Either::B(
         field
-            .fold(file, move |mut file, bytes| {
+            .fold(file, move |mut file: std::fs::File, bytes| {
                 // fs operations are blocking, we have to execute writes
                 // on threadpool
                 web::block(move || {
@@ -71,7 +71,7 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     )
 }
 
-pub fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
+fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
     multipart
         .map_err(error::ErrorInternalServerError)
         .map(|field| save_file(field).into_stream())
@@ -102,7 +102,7 @@ fn init() {
 
 fn main() -> std::io::Result<()> {
     init();
-    let address: std::net::SocketAddrV4 = PRIVATE_HOSTNAME.parse().unwrap();
+    let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
 
     HttpServer::new(|| {
         let public_folder: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
