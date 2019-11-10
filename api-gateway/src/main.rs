@@ -4,13 +4,16 @@ mod models;
 // crates
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::http::header::ContentDisposition;
-use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
+use actix_web::http::Uri;
+use actix_web::{error, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use bytes::Bytes;
 use env_logger;
 use futures::{Future, Stream};
 use reqwest;
 use reqwest::multipart::Part;
+use reqwest::Url;
 use reqwest::{Client, Response};
+use std::io::Read;
 use std::sync::Arc;
 
 // Evaluate env vars only once
@@ -27,13 +30,13 @@ fn create_bytes(field: Field) -> impl Future<Item = (Bytes, String), Error = Err
     let content_disposition: ContentDisposition = field.content_disposition().unwrap();
     // Get filename, ex: file.fake.extension
     let filename: String = String::from(content_disposition.get_filename().unwrap());
-    // Get (all?) bytes of the field
+    // Get the bytes of the field into bytes
     let bytes: Bytes = Bytes::new();
     field
-        .fold(bytes, move |bytes: Bytes, field_bytes: Bytes| {
+        .fold(bytes, move |mut last_chunk: Bytes, current_chunk: Bytes| {
             web::block(move || {
-                let new_bytes = Bytes::from([bytes, field_bytes].concat());
-                Ok(new_bytes)
+                last_chunk.extend(current_chunk);
+                Ok(last_chunk)
             })
             .map_err(|e| match e {
                 error::BlockingError::Error(e) => e,
@@ -48,6 +51,7 @@ fn upload(
     multipart: Multipart,
     client: web::Data<Arc<reqwest::Client>>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
+    let arc_client = client;
     // For each multipart field
     multipart
         .map_err(error::ErrorInternalServerError)
@@ -55,27 +59,29 @@ fn upload(
         .flatten()
         .collect()
         .map(|couples: Vec<(Bytes, String)>| {
-            let destination_address: String = format!(
+            // Create url string
+            let destination_address_string: String = format!(
                 "{}{}{}",
                 UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
                 API_ROUTE.parse::<String>().unwrap(),
                 UPLOAD_ROUTE.parse::<String>().unwrap(),
             );
+            // Then Parse it into URL
+            let destination_address: Url = destination_address_string.parse().unwrap();
             let mut request = reqwest::multipart::Form::new();
 
             for field in couples {
                 let native_bytes: &[u8] = field.0.as_ref();
-                let filename: String = field.1.clone();
+                let filename: String = field.1;
                 let part: Part = Part::bytes(native_bytes.to_owned()).file_name(filename.clone());
-                request = request.part(filename.clone(), part);
+                request = request.part(filename, part);
             }
-            let new_client = Client::new();
-            let mut response: Response = new_client
-                .post(&destination_address)
+            let client = arc_client;
+            let mut response: Response = client
+                .post(destination_address)
                 .multipart(request)
                 .send()
                 .unwrap();
-            println!("{:?}", response);
             let photos: Vec<String> = response.json().unwrap();
             let upload_response: models::UploadResponse = models::UploadResponse { data: photos };
 
@@ -87,11 +93,41 @@ fn upload(
         })
 }
 
+fn uploaded_files(
+    request: HttpRequest,
+    client: web::Data<Arc<reqwest::Client>>,
+) -> Result<HttpResponse, Error> {
+    let arc_client = client.clone();
+    let full_uri: &Uri = request.uri();
+    let path = full_uri.path();
+    // Create url string
+    let destination_address_string: String = format!(
+        "{}{}{}",
+        UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
+        API_ROUTE.parse::<String>().unwrap(),
+        path.parse::<String>().unwrap(),
+    );
+    println!("{:?}", destination_address_string);
+    // Then Parse it into URL
+    let destination_address: Url = destination_address_string.parse().unwrap();
+    println!("{:?}", destination_address);
+
+    let mut response: Response = arc_client.get(destination_address).send().unwrap();
+    let mut buffer: String = String::from("");
+    response
+        .read_to_string(&mut buffer)
+        .map(|_result| HttpResponse::Ok().body(buffer))
+        .map_err(|e| Error::from(e))
+}
+
 fn main() -> std::io::Result<()> {
     //std::env::set_var("RUST_LOG", "actix_http=trace");
     let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
     //TODO: Custom http client
-    let http_client = Arc::new(Client::new());
+    let client_builder = Client::builder();
+    // client_builder.cookie_store(true);
+    // client_builder.use_rustls_tls();
+    let http_client = Arc::new(client_builder.build().unwrap());
     env_logger::init();
 
     // Start http server
@@ -101,7 +137,8 @@ fn main() -> std::io::Result<()> {
             .data(http_client.clone())
             .service(
                 web::scope(&API_ROUTE)
-                    .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload))),
+                    .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
+                    .service(web::resource(&PUBLIC_ROUTE).route(web::get().to(uploaded_files))),
             )
     })
     .bind(address)?

@@ -18,3 +18,6 @@ mongo/
 # Production environment
 .env.production
 .env
+
+# Remove local backups
+*.bak

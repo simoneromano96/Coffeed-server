@@ -10,6 +10,7 @@ use mongodb::{
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
+
 graphql_schema_from_file!("src/schema.graphql");
 
 pub struct Context {
