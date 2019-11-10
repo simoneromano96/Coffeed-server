@@ -129,6 +129,7 @@ fn main() -> std::io::Result<()> {
     // client_builder.use_rustls_tls();
     let http_client = Arc::new(client_builder.build().unwrap());
     env_logger::init();
+    let public_route: String = format!("{}/tail:.*", UPLOAD_ROUTE.parse::<String>().unwrap());
 
     // Start http server
     HttpServer::new(move || {
@@ -138,7 +139,7 @@ fn main() -> std::io::Result<()> {
             .service(
                 web::scope(&API_ROUTE)
                     .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
-                    .service(web::resource(&PUBLIC_ROUTE).route(web::get().to(uploaded_files))),
+                    .service(web::resource(&public_route).route(web::get().to(uploaded_files))),
             )
     })
     .bind(address)?
