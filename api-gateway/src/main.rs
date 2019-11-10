@@ -99,12 +99,12 @@ fn uploaded_files(
 ) -> Result<HttpResponse, Error> {
     let arc_client = client.clone();
     let full_uri: &Uri = request.uri();
+    // Path already includes /api
     let path = full_uri.path();
     // Create url string
     let destination_address_string: String = format!(
-        "{}{}{}",
+        "{}{}",
         UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
-        API_ROUTE.parse::<String>().unwrap(),
         path.parse::<String>().unwrap(),
     );
     println!("{:?}", destination_address_string);
