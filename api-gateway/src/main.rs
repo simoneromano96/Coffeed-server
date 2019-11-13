@@ -97,7 +97,7 @@ fn uploaded_files(
     request: HttpRequest,
     client: web::Data<Arc<reqwest::Client>>,
 ) -> Result<HttpResponse, Error> {
-    let arc_client = client.clone();
+    let arc_client = client;
     let full_uri: &Uri = request.uri();
     // Path already includes /api
     let path = full_uri.path();
@@ -117,7 +117,7 @@ fn uploaded_files(
     response
         .read_to_string(&mut buffer)
         .map(|_result| HttpResponse::Ok().body(buffer))
-        .map_err(|e| Error::from(e))
+        .map_err(Error::from)
 }
 
 fn main() -> std::io::Result<()> {
@@ -129,7 +129,7 @@ fn main() -> std::io::Result<()> {
     // client_builder.use_rustls_tls();
     let http_client = Arc::new(client_builder.build().unwrap());
     env_logger::init();
-    let public_route: String = format!("{}/tail:.*", UPLOAD_ROUTE.parse::<String>().unwrap());
+    // let public_route: String = format!("{}/tail:.*", UPLOAD_ROUTE.parse::<String>().unwrap());
 
     // Start http server
     HttpServer::new(move || {
@@ -139,7 +139,7 @@ fn main() -> std::io::Result<()> {
             .service(
                 web::scope(&API_ROUTE)
                     .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
-                    .service(web::resource(&public_route).route(web::get().to(uploaded_files))),
+                    .service(web::resource(&PUBLIC_ROUTE).route(web::get().to(uploaded_files))),
             )
     })
     .bind(address)?
