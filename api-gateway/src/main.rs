@@ -1,7 +1,7 @@
-// modules
+// Modules
 mod models;
 
-// crates
+// Crates
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::http::header::ContentDisposition;
 use actix_web::http::Uri;
@@ -93,14 +93,16 @@ fn upload(
         })
 }
 
-fn uploaded_files(
+fn public_files(
     request: HttpRequest,
     client: web::Data<Arc<reqwest::Client>>,
 ) -> Result<HttpResponse, Error> {
     let arc_client = client;
     let full_uri: &Uri = request.uri();
+    println!("{:?}", full_uri);
     // Path already includes /api
     let path = full_uri.path();
+    println!("{:?}", path);
     // Create url string
     let destination_address_string: String = format!(
         "{}{}",
@@ -113,9 +115,9 @@ fn uploaded_files(
     println!("{:?}", destination_address);
 
     let mut response: Response = arc_client.get(destination_address).send().unwrap();
-    let mut buffer: String = String::from("");
+    let mut buffer: Vec<u8> = Vec::new();
     response
-        .read_to_string(&mut buffer)
+        .read_to_end(&mut buffer)
         .map(|_result| HttpResponse::Ok().body(buffer))
         .map_err(Error::from)
 }
@@ -139,7 +141,7 @@ fn main() -> std::io::Result<()> {
             .service(
                 web::scope(&API_ROUTE)
                     .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
-                    .service(web::resource(&PUBLIC_ROUTE).route(web::get().to(uploaded_files))),
+                    .service(web::resource(&PUBLIC_ROUTE).route(web::get().to(public_files))),
             )
     })
     .bind(address)?
