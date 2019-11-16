@@ -72,18 +72,19 @@ fn logout(session: Session) -> Result<HttpResponse> {
 
 fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info,actix_redis=info");
-    pretty_env_logger::init();
+    env_logger::init();
 
     HttpServer::new(|| {
         App::new()
-            // redis session middleware
             .wrap(RedisSession::new("127.0.0.1:6379", &[0; 32]))
-            // enable logger - always register actix-web Logger middleware last
             .wrap(middleware::Logger::default())
-            .service(resource("/").route(get().to(index)))
-            .service(resource("/increment").route(post().to(increment)))
-            .service(resource("/login").route(post().to(login)))
-            .service(resource("/logout").route(post().to(logout)))
+            .service(
+                web::scope(&API_ROUTE)
+                    .service(resource("/").route(get().to(index)))
+                    .service(resource("/increment").route(post().to(increment)))
+                    .service(resource("/login").route(post().to(login)))
+                    .service(resource("/logout").route(post().to(logout))),
+            )
     })
     .bind("127.0.0.1:8080")?
     .run()
