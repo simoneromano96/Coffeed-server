@@ -123,7 +123,6 @@ fn public_files(
 }
 
 fn main() -> std::io::Result<()> {
-    //std::env::set_var("RUST_LOG", "actix_http=trace");
     let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
     //TODO: Custom http client
     let client_builder = Client::builder();
@@ -131,7 +130,6 @@ fn main() -> std::io::Result<()> {
     // client_builder.use_rustls_tls();
     let http_client = Arc::new(client_builder.build().unwrap());
     env_logger::init();
-    // let public_route: String = format!("{}/tail:.*", UPLOAD_ROUTE.parse::<String>().unwrap());
 
     // Start http server
     HttpServer::new(move || {

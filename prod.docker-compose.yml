@@ -27,16 +27,29 @@ services:
     ports:
       - 6379:6379
 
-  coffees-service:
+  api-gateway:
     build:
-      context: ./coffees-service
-      dockerfile: ./coffees-service/.docker/coffees-service.dockerfile
+      context: ./api-gateway
+      dockerfile: ./.docker/api-gateway.dockerfile
+    restart: unless-stopped
+    networks:
+      - api_network
     env_file:
-      - ./coffees-service/.env
+      - ./api-gateway/.env
+    ports:
+      - 8081:80
 
-  auth-service:
+  upload-service:
     build:
-      context: ./auth-service
-      dockerfile: ./auth-service/.docker/auth-service.dockerfile
+      context: ./upload-service
+      dockerfile: ./.docker/upload-service.dockerfile
+    restart: unless-stopped
+    networks:
+      - api_network
     env_file:
-      - ./auth-service/.env
+      - ./upload-service/.env
+    # ports:
+    #   - 8082:80
+
+networks:
+  api_network:
