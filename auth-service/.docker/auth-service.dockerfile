@@ -1,11 +1,11 @@
-FROM rust:alpine
+FROM rust:slim
 
-RUN mkdir /app
-
-WORKDIR /app
+WORKDIR /auth-service
 
 COPY . .
 
-RUN cargo build --release
+RUN cargo install --path .
 
-CMD [ "/app/target/release/auth-service" ]
+EXPOSE 80
+
+CMD ["auth-service"]

@@ -6,16 +6,11 @@
 //!
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::client::SendRequestError;
-use actix_web::web::HttpRequest;
 use actix_web::{
-    client::Client,
     middleware, web,
     web::{get, post, resource},
     App, HttpResponse, HttpServer, Result,
 };
-use futures::future::Future;
-use pretty_env_logger;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -34,7 +29,7 @@ fn index(session: Session) -> Result<HttpResponse> {
     Ok(HttpResponse::Ok().json(IndexResponse { user_id, counter }))
 }
 
-fn do_something(session: Session) -> Result<HttpResponse> {
+fn increment(session: Session) -> Result<HttpResponse> {
     let user_id: Option<String> = session.get::<String>("user_id").unwrap();
     let counter: i32 = session
         .get::<i32>("counter")
@@ -75,19 +70,6 @@ fn logout(session: Session) -> Result<HttpResponse> {
     }
 }
 
-fn test_api(
-    request: HttpRequest,
-    session: Session,
-) -> impl Future<Item = HttpResponse, Error = SendRequestError> {
-    let client = Client::build()
-        .bearer_auth("coffeed__auth_service__secret_id")
-        .finish();
-    client
-        .get("http://127.0.0.1:3005")
-        .send()
-        .and_then(|result| Ok("Yolo".into()))
-}
-
 fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info,actix_redis=info");
     pretty_env_logger::init();
@@ -95,14 +77,13 @@ fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             // redis session middleware
-            .wrap(RedisSession::new("http://127.0.0.1:6379", &[0; 32]))
+            .wrap(RedisSession::new("127.0.0.1:6379", &[0; 32]))
             // enable logger - always register actix-web Logger middleware last
             .wrap(middleware::Logger::default())
-            // .service(resource("/").route(get().to(index)))
-            // .service(resource("/do_something").route(post().to(do_something)))
+            .service(resource("/").route(get().to(index)))
+            .service(resource("/increment").route(post().to(increment)))
             .service(resource("/login").route(post().to(login)))
             .service(resource("/logout").route(post().to(logout)))
-            .service(resource("/*").route(post().to_async(test_api)))
     })
     .bind("127.0.0.1:8080")?
     .run()

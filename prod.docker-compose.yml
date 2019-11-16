@@ -39,6 +39,18 @@ services:
     ports:
       - 8081:80
 
+  auth-service:
+    build:
+      context: ./upload-service
+      dockerfile: ./.docker/upload-service.dockerfile
+    restart: unless-stopped
+    networks:
+      - api_network
+    env_file:
+      - ./upload-service/.env
+    ports:
+      - 8082:80
+
   upload-service:
     build:
       context: ./upload-service
@@ -49,7 +61,7 @@ services:
     env_file:
       - ./upload-service/.env
     # ports:
-    #   - 8082:80
+    #   - 8083:80
 
 networks:
   api_network:

@@ -99,20 +99,16 @@ fn public_files(
 ) -> Result<HttpResponse, Error> {
     let arc_client = client;
     let full_uri: &Uri = request.uri();
-    println!("{:?}", full_uri);
     // Path already includes /api
     let path = full_uri.path();
-    println!("{:?}", path);
     // Create url string
     let destination_address_string: String = format!(
         "{}{}",
         UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
         path.parse::<String>().unwrap(),
     );
-    println!("{:?}", destination_address_string);
     // Then Parse it into URL
     let destination_address: Url = destination_address_string.parse().unwrap();
-    println!("{:?}", destination_address);
 
     let mut response: Response = arc_client.get(destination_address).send().unwrap();
     let mut buffer: Vec<u8> = Vec::new();
