@@ -18,7 +18,6 @@ lazy_static::lazy_static! {
     pub static ref UPLOAD_ROUTE: String = std::env::var("UPLOAD_ROUTE").unwrap();
     pub static ref PUBLIC_ROUTE: String = std::env::var("PUBLIC_ROUTE").unwrap();
     // Auth service
-
 }
 
 fn main() -> std::io::Result<()> {
@@ -29,6 +28,8 @@ fn main() -> std::io::Result<()> {
     // client_builder.use_rustls_tls();
     let http_client = Arc::new(client_builder.build().unwrap());
     env_logger::init();
+    // Add a global listening to /public*
+    let public_route: String = format!("{}*", PUBLIC_ROUTE.parse::<String>().unwrap());
 
     // Start http server
     HttpServer::new(move || {
@@ -42,7 +43,7 @@ fn main() -> std::io::Result<()> {
                             .route(web::post().to_async(upload_service::upload)),
                     )
                     .service(
-                        web::resource(&PUBLIC_ROUTE)
+                        web::resource(&public_route)
                             .route(web::get().to(upload_service::public_files)),
                     ),
             )

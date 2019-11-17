@@ -17,6 +17,8 @@ lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
     pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
+    pub static ref LOGIN_ROUTE: String = std::env::var("LOGIN_ROUTE").unwrap();
+    pub static ref LOGOUT_ROUTE: String = std::env::var("LOGOUT_ROUTE").unwrap();
     pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
     pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
     pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
@@ -27,7 +29,7 @@ pub struct IndexResponse {
     user_id: Option<String>,
     counter: i32,
 }
-
+/*
 fn index(session: Session) -> Result<HttpResponse> {
     let user_id: Option<String> = session.get::<String>("user_id").unwrap();
     let counter: i32 = session
@@ -48,6 +50,7 @@ fn increment(session: Session) -> Result<HttpResponse> {
 
     Ok(HttpResponse::Ok().json(IndexResponse { user_id, counter }))
 }
+*/
 
 #[derive(Deserialize)]
 struct Identity {
@@ -96,10 +99,10 @@ fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .service(
                 web::scope(&API_ROUTE)
-                    .service(resource("/").route(get().to(index)))
-                    .service(resource("/increment").route(post().to(increment)))
-                    .service(resource("/login").route(post().to(login)))
-                    .service(resource("/logout").route(post().to(logout))),
+                    // .service(resource("/").route(get().to(index)))
+                    // .service(resource("/increment").route(post().to(increment)))
+                    .service(resource(&LOGIN_ROUTE).route(post().to(login)))
+                    .service(resource(&LOGOUT_ROUTE).route(post().to(logout))),
             )
     })
     .bind(address)?
