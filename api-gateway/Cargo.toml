@@ -14,7 +14,7 @@ actix-http="^0.2.10"
 lazy_static="^1.4.0"
 actix-multipart="^0.1.4"
 url="^2.1.0"
-bytes="^0.4.12"
+# bytes="^0.4.12"
 env_logger = "^0.7.1"
 # Serde for serialisation/deserialisation
 serde = "^1.0.102"
