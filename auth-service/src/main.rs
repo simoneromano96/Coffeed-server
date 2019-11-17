@@ -12,6 +12,15 @@ use actix_web::{
     App, HttpResponse, HttpServer, Result,
 };
 use serde::{Deserialize, Serialize};
+// Evaluate env vars only once
+lazy_static::lazy_static! {
+    pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
+    pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
+    pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
+    pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
+    pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
+    pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct IndexResponse {
@@ -71,12 +80,19 @@ fn logout(session: Session) -> Result<HttpResponse> {
 }
 
 fn main() -> std::io::Result<()> {
+    let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
+    let redis_host: String = format!(
+        "{}:{}",
+        &REDIS_HOST.parse::<String>().unwrap(),
+        &REDIS_PORT.parse::<String>().unwrap()
+    );
+    let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
     std::env::set_var("RUST_LOG", "actix_web=info,actix_redis=info");
     env_logger::init();
 
-    HttpServer::new(|| {
+    HttpServer::new(move || {
         App::new()
-            .wrap(RedisSession::new("127.0.0.1:6379", &[0; 32]))
+            .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(
                 web::scope(&API_ROUTE)
@@ -86,6 +102,6 @@ fn main() -> std::io::Result<()> {
                     .service(resource("/logout").route(post().to(logout))),
             )
     })
-    .bind("127.0.0.1:8080")?
+    .bind(address)?
     .run()
 }

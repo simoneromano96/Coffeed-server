@@ -48,13 +48,13 @@ services:
 
   auth-service:
     build:
-      context: ./upload-service
-      dockerfile: ./.docker/upload-service.dockerfile
+      context: ./auth-service
+      dockerfile: ./.docker/auth-service.dockerfile
     restart: unless-stopped
     networks:
       - api_network
     env_file:
-      - ./upload-service/.env
+      - ./auth-service/.env
     ports:
       - 8082:80
 
