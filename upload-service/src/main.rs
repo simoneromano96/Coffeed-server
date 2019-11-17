@@ -13,18 +13,12 @@ use url::Url;
 // Evaluate env vars only once
 lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
-    pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
+    pub static ref UPLOAD_SERVICE_URL: String = std::env::var("UPLOAD_SERVICE_URL").unwrap();
+    pub static ref API_GATEWAY_PUBLIC_URL: String = std::env::var("API_GATEWAY_PUBLIC_URL").unwrap();
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
     pub static ref PUBLIC_ROUTE: String = std::env::var("PUBLIC_ROUTE").unwrap();
     pub static ref UPLOAD_ROUTE: String = std::env::var("UPLOAD_ROUTE").unwrap();
-    pub static ref ABSOLUTE_PUBLIC_FOLDER: PathBuf = absolute_path_public_folder(std::env::var("PUBLIC_FOLDER").unwrap());
-}
-
-fn absolute_path_public_folder(public_folder: String) -> PathBuf {
-    let mut absolute_path: PathBuf = std::env::current_dir().unwrap();
-    let relative_path: &str = &public_folder;
-    absolute_path.push(relative_path);
-    absolute_path
+    pub static ref PUBLIC_FOLDER: String = std::env::var("PUBLIC_FOLDER").unwrap();
 }
 
 fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
@@ -36,7 +30,7 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     // Create url
     let url: String = format!(
         "{}{}{}/{}",
-        PUBLIC_BASE_URL.to_owned(),
+        API_GATEWAY_PUBLIC_URL.to_owned(),
         API_ROUTE.to_owned(),
         PUBLIC_ROUTE.to_owned(),
         uploaded_filename
@@ -44,7 +38,7 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
     let file_url: Url = Url::parse(&url).unwrap();
 
     // Local filepath
-    let mut file_path: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
+    let mut file_path: PathBuf = PUBLIC_FOLDER.parse::<PathBuf>().unwrap();
     file_path.push(uploaded_filename);
     let file = match fs::File::create(file_path) {
         Ok(file) => file,
@@ -85,7 +79,7 @@ fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Erro
 }
 
 fn create_public_folder() {
-    let absolute_path: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
+    let absolute_path: PathBuf = PUBLIC_FOLDER.parse::<PathBuf>().unwrap();
     // Recursive won't fail if the folders already exist
     fs::DirBuilder::new()
         .recursive(true)
@@ -105,7 +99,7 @@ fn main() -> std::io::Result<()> {
     let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
 
     HttpServer::new(|| {
-        let public_folder: PathBuf = ABSOLUTE_PUBLIC_FOLDER.to_path_buf();
+        let public_folder: PathBuf = PUBLIC_FOLDER.parse::<PathBuf>().unwrap();
         App::new().wrap(middleware::Logger::default()).service(
             // Group routes by API_ROUTE
             web::scope(&API_ROUTE)

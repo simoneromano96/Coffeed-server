@@ -1,6 +1,7 @@
 // Modules
 pub mod models;
 pub mod upload_service;
+pub mod auth_service;
 
 // Crates
 use actix_web::{middleware, web, App, HttpServer};
@@ -12,7 +13,7 @@ use std::sync::Arc;
 // Evaluate env vars only once
 lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
-    pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
+    pub static ref API_GATEWAY_PUBLIC_URL: String = std::env::var("API_GATEWAY_PUBLIC_URL").unwrap();
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
     // Upload service
     pub static ref UPLOAD_ROUTE: String = std::env::var("UPLOAD_ROUTE").unwrap();

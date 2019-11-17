@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 // Evaluate env vars only once
 lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
-    pub static ref PUBLIC_BASE_URL: String = std::env::var("PUBLIC_BASE_URL").unwrap();
+    pub static ref AUTH_SERVICE_PUBLIC_URL: String = std::env::var("AUTH_SERVICE_PUBLIC_URL").unwrap();
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
     pub static ref LOGIN_ROUTE: String = std::env::var("LOGIN_ROUTE").unwrap();
     pub static ref LOGOUT_ROUTE: String = std::env::var("LOGOUT_ROUTE").unwrap();
