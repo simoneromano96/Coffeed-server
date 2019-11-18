@@ -16,8 +16,9 @@ use std::{env, io, net::SocketAddrV4, sync::Arc};
 // Evaluate env vars only once
 lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = env::var("LISTEN_AT").unwrap();
-    pub static ref API_GATEWAY_PUBLIC_URL: String = env::var("API_GATEWAY_PUBLIC_URL").unwrap();
     pub static ref API_ROUTE: String = env::var("API_ROUTE").unwrap();
+    // Gateway
+    pub static ref API_GATEWAY_PUBLIC_URL: String = env::var("API_GATEWAY_PUBLIC_URL").unwrap();
     // Upload service
     pub static ref UPLOAD_SERVICE_URL: String = std::env::var("UPLOAD_SERVICE_URL").unwrap();
     pub static ref UPLOAD_ROUTE: String = env::var("UPLOAD_ROUTE").unwrap();
@@ -27,6 +28,10 @@ lazy_static::lazy_static! {
     pub static ref AUTH_SERVICE_URL: String = env::var("AUTH_SERVICE_URL").unwrap();
     pub static ref LOGIN_ROUTE: String = env::var("LOGIN_ROUTE").unwrap();
     pub static ref LOGOUT_ROUTE: String = env::var("LOGOUT_ROUTE").unwrap();
+    // Redis
+    pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
+    pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
+    pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -40,9 +45,9 @@ struct Identity {
     user_id: String,
 }
 
-fn login(req: HttpRequest, user_id: web::Json<Identity>, session: Session) -> Result<HttpResponse> {
-    let id = user_id.into_inner().user_id;
-    session.set("user_id", &id)?;
+fn login(req: HttpRequest, session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResponse {
+    let id = String::from("123");
+    session.set("user_id", &id).unwrap();
     session.renew();
 
     let counter: i32 = session
@@ -50,20 +55,23 @@ fn login(req: HttpRequest, user_id: web::Json<Identity>, session: Session) -> Re
         .unwrap_or(Some(0))
         .unwrap_or(0);
 
-    Ok(HttpResponse::Ok().json(IndexResponse {
+    HttpResponse::Ok().json(IndexResponse {
         user_id: Some(id),
         counter,
-    }))
+    })
 }
 
-fn logout(session: Session) -> Result<HttpResponse> {
-    let id: Option<String> = session.get("user_id")?;
+fn logout(session: Session) -> HttpResponse {
+    let id: Option<String> = session.get("user_id").unwrap();
+    let message: String;
     if let Some(x) = id {
         session.purge();
-        Ok(format!("Logged out: {}", x).into())
+        
+        message = format!("Logged out: {}", x);
     } else {
-        Ok("Could not log out anonymous user".into())
+        message = String::from("Could not log out anonymous user");
     }
+    HttpResponse::Ok().json(message)
 }
 
 fn main() -> io::Result<()> {
@@ -91,6 +99,9 @@ fn main() -> io::Result<()> {
                     .service(
                         web::resource(&public_route)
                             .route(web::get().to(upload_service::public_files)),
+                    )
+                    .service(
+                        web::resource(&LOGIN_ROUTE).route(web::get().to(login))
                     ),
             )
     })
