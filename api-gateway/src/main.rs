@@ -4,6 +4,7 @@ pub mod models;
 pub mod upload_service;
 
 // Crates
+use actix_redis::RedisSession;
 use actix_session::Session;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
@@ -45,7 +46,11 @@ struct Identity {
     user_id: String,
 }
 
-fn login(req: HttpRequest, session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResponse {
+fn login(
+    req: HttpRequest,
+    session: Session,
+    client: web::Data<Arc<reqwest::Client>>,
+) -> HttpResponse {
     let id = String::from("123");
     session.set("user_id", &id).unwrap();
     session.renew();
@@ -61,12 +66,11 @@ fn login(req: HttpRequest, session: Session, client: web::Data<Arc<reqwest::Clie
     })
 }
 
-fn logout(session: Session) -> HttpResponse {
+fn logout(session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResponse {
     let id: Option<String> = session.get("user_id").unwrap();
     let message: String;
     if let Some(x) = id {
         session.purge();
-        
         message = format!("Logged out: {}", x);
     } else {
         message = String::from("Could not log out anonymous user");
@@ -74,20 +78,41 @@ fn logout(session: Session) -> HttpResponse {
     HttpResponse::Ok().json(message)
 }
 
-fn main() -> io::Result<()> {
-    let address: SocketAddrV4 = LISTEN_AT.parse::<SocketAddrV4>().unwrap();
-    //TODO: Custom http client
-    let client_builder: ClientBuilder = Client::builder();
-    // client_builder.cookie_store(true);
-    // client_builder.use_rustls_tls();
-    let http_client = Arc::new(client_builder.build().unwrap());
-    env_logger::init();
+fn init() -> (SocketAddrV4, String, String, Vec<u8>, Arc<reqwest::Client>) {
+    // Create a socket address from listen_at
+    let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
     // Add a global listening to /public*
     let public_route: String = format!("{}*", PUBLIC_ROUTE.parse::<String>().unwrap());
+    // Session
+    let redis_host: String = format!(
+        "{}:{}",
+        &REDIS_HOST.parse::<String>().unwrap(),
+        &REDIS_PORT.parse::<String>().unwrap()
+    );
+    let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
+    // Logger utility
+    env_logger::init();
+    // Client for requests
+    // TODO: Custom http client
+    let client_builder: ClientBuilder = Client::builder();
+    let http_client = Arc::new(client_builder.build().unwrap());
+
+    (
+        address,
+        public_route,
+        redis_host,
+        session_secret,
+        http_client,
+    )
+}
+
+fn main() -> io::Result<()> {
+    let (address, public_route, redis_host, session_secret, http_client) = init();
 
     // Start http server
     HttpServer::new(move || {
         App::new()
+            .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .data(http_client.clone())
             .service(
@@ -100,9 +125,8 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to(upload_service::public_files)),
                     )
-                    .service(
-                        web::resource(&LOGIN_ROUTE).route(web::get().to(login))
-                    ),
+                    .service(web::resource(&LOGIN_ROUTE).route(web::get().to(login)))
+                    .service(web::resource(&LOGOUT_ROUTE).route(web::post().to(logout))),
             )
     })
     .bind(address)?

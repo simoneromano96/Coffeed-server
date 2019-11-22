@@ -12,6 +12,8 @@ use actix_web::{
     App, HttpResponse, HttpServer, Result,
 };
 use serde::{Deserialize, Serialize};
+use std::{io, net::SocketAddrV4};
+
 // Evaluate env vars only once
 lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
@@ -82,16 +84,24 @@ fn logout(session: Session) -> Result<HttpResponse> {
     }
 }
 
-fn main() -> std::io::Result<()> {
-    let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
+fn init() -> (SocketAddrV4, String, Vec<u8>) {
+    // Create a socket address from listen_at
+    let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
+    // Session
     let redis_host: String = format!(
         "{}:{}",
         &REDIS_HOST.parse::<String>().unwrap(),
         &REDIS_PORT.parse::<String>().unwrap()
     );
     let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
-    std::env::set_var("RUST_LOG", "actix_web=info,actix_redis=info");
+    // Logger utility
     env_logger::init();
+
+    (address, redis_host, session_secret)
+}
+
+fn main() -> io::Result<()> {
+    let (address, redis_host, session_secret) = init();
 
     HttpServer::new(move || {
         App::new()
