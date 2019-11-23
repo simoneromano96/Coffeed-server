@@ -40,10 +40,11 @@ services:
     ports:
       - 8080:80
     env_file:
-      - ./upload-service/.env.example
+      - ./.env
     networks:
       - coffeed-network
     volumes:
+      - ./public:/upload-service/public
       - ./upload-service:/upload-service
 
   api-gateway:
@@ -53,7 +54,7 @@ services:
     ports:
       - 8081:80
     env_file:
-      - ./api-gateway/.env.example
+      - ./.env
     networks:
       - coffeed-network
     volumes:
@@ -66,7 +67,7 @@ services:
     ports:
       - 8082:80
     env_file:
-      - ./auth-service/.env.example
+      - ./.env
     networks:
       - coffeed-network
     volumes:
