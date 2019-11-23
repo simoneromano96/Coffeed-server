@@ -1,6 +1,6 @@
 FROM rust:slim
 
-WORKDIR /upload-service
+WORKDIR /auth-service
 
 RUN cargo install cargo-watch
 
