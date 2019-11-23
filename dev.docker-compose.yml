@@ -2,16 +2,18 @@ version: "3.6"
 
 services:
   # TODO: Create an alpine dockerimage
-  # mongo:
-  #   image: mongo
-  #   restart: unless-stopped
-  #   environment:
-  #     MONGO_INITDB_ROOT_USERNAME: username
-  #     MONGO_INITDB_ROOT_PASSWORD: password
-  #   ports:
-  #     - 27017:27017
-  #   volumes:
-  #     - ./mongo:/data/db
+  mongo:
+    image: mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: username
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - coffeed-network
 
   # TODO: Switch to custom alpine nosqlclient (ex-mongoclient) (url: https://hub.docker.com/r/mongoclient/mongoclient/dockerfile)
   # mongo-express:
@@ -23,11 +25,13 @@ services:
   #     ME_CONFIG_MONGODB_ADMINUSERNAME: username
   #     ME_CONFIG_MONGODB_ADMINPASSWORD: password
 
-  # redis:
-  #   image: redis:alpine
-  #   restart: unless-stopped
-  #   ports:
-  #     - 6379:6379
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    networks:
+      - coffeed-network
 
   upload-service:
     build:
@@ -54,18 +58,22 @@ services:
       - coffeed-network
     volumes:
       - ./api-gateway:/api-gateway
-  # coffees-service:
-  #   build:
-  #     context: ./coffees-service
-  #     dockerfile: ./coffees-service/.docker/coffees-service.dockerfile
-  #   env_file:
-  #     - ./coffees-service/.env.example
-  # auth-service:
-  #   build:
-  #     context: ./auth-service
-  #     dockerfile: ./auth-service/.docker/auth-service.dockerfile
-  #   env_file:
-  #     - ./auth-service/.env.example
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: .docker/auth-service.dev.dockerfile
+    ports:
+      - 8082:80
+    env_file:
+      - ./auth-service/.env.example
+    networks:
+      - coffeed-network
+    volumes:
+      - ./auth-service:/auth-service
 
 networks:
   coffeed-network:
+
+volumes:
+  mongo_data:
