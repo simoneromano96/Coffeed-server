@@ -96,35 +96,6 @@ impl BaseResponseFields for BaseResponse {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct User {
-    #[serde(rename = "_id")]
-    pub id: ObjectId,
-    pub username: String,
-    pub email: String,
-    pub password: String,
-    #[serde(rename = "userType")]
-    pub user_type: String,
-}
-
-impl UserFields for User {
-    fn field_id(&self, _: &Executor<'_, Context>) -> FieldResult<juniper::ID> {
-        Ok(juniper::ID::new(self.id.to_hex()))
-    }
-    fn field_username(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.username)
-    }
-    fn field_email(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.email)
-    }
-    fn field_password(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.password)
-    }
-    fn field_user_type(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.user_type)
-    }
-}
-
 impl Serialize for UpdateCoffeeInput {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

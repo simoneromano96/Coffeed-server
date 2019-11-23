@@ -3,7 +3,10 @@
 //! Every request gets a session, corresponding to a cache entry and cookie.
 //! At login, the session key changes and session state in cache re-assigns.
 //! At logout, session state in cache is removed and cookie is invalidated.
-//!
+// Modules
+mod graphql;
+
+// Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
 use actix_web::{
@@ -31,6 +34,12 @@ pub struct IndexResponse {
     user_id: Option<String>,
     counter: i32,
 }
+
+#[derive(Deserialize)]
+struct Identity {
+    user_id: String,
+}
+
 /*
 fn index(session: Session) -> Result<HttpResponse> {
     let user_id: Option<String> = session.get::<String>("user_id").unwrap();
@@ -54,10 +63,8 @@ fn increment(session: Session) -> Result<HttpResponse> {
 }
 */
 
-#[derive(Deserialize)]
-struct Identity {
-    user_id: String,
-}
+fn signup() {}
+
 fn login(user_id: web::Json<Identity>, session: Session) -> Result<HttpResponse> {
     let id = user_id.into_inner().user_id;
     session.set("user_id", &id)?;
