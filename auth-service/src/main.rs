@@ -119,11 +119,11 @@ fn main() -> io::Result<()> {
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(Compress::default())
             .wrap(middleware::Logger::default())
-            .service(scope(&API_ROUTE))
-            // .service(resource("/").route(get().to(index)))
-            // .service(resource("/increment").route(post().to(increment)))
-            .service(resource(&LOGIN_ROUTE).route(post().to(login)))
-            .service(resource(&LOGOUT_ROUTE).route(post().to(logout)))
+            .service(
+                scope(&API_ROUTE)
+                    .service(resource(&LOGIN_ROUTE).route(post().to(login)))
+                    .service(resource(&LOGOUT_ROUTE).route(post().to(logout))),
+            )
     })
     .bind(address)?
     .run()

@@ -118,7 +118,7 @@ fn main() -> io::Result<()> {
             .service(
                 web::scope(&(API_ROUTE.parse::<String>().unwrap()))
                     .service(
-                        web::resource(&(API_ROUTE.parse::<String>().unwrap()))
+                        web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to_async(upload_service::upload)),
                     )
                     .service(
@@ -126,11 +126,11 @@ fn main() -> io::Result<()> {
                             .route(web::get().to(upload_service::public_files)),
                     )
                     .service(
-                        web::resource(&(API_ROUTE.parse::<String>().unwrap()))
+                        web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
                             .route(web::get().to(login)),
                     )
                     .service(
-                        web::resource(&(API_ROUTE.parse::<String>().unwrap()))
+                        web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to(logout)),
                     ),
             )
