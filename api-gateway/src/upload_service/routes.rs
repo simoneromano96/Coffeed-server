@@ -2,27 +2,13 @@
 use crate::models;
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::{
-    web::Bytes,
-    http::Uri,
-    http::header::ContentDisposition,
-    HttpRequest,
-    Error,
-    web,
-    error,
+    error, http::header::ContentDisposition, http::Uri, web, web::Bytes, Error, HttpRequest,
     HttpResponse,
 };
 use futures::{Future, Stream};
-use reqwest::{
-    multipart::Part,
-    self,
-    Response,
-    Url,
-};
-use std::{
-    io::Read,
-    sync::Arc,
-};
 use reqwest::multipart::Form;
+use reqwest::{self, multipart::Part, Response, Url};
+use std::{io::Read, sync::Arc};
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
@@ -33,7 +19,7 @@ lazy_static::lazy_static! {
     pub static ref UPLOAD_ROUTE: String = std::env::var("UPLOAD_ROUTE").unwrap();
 }
 
-fn create_bytes(field: Field) -> impl Future<Item=(Bytes, String), Error=Error> {
+fn create_bytes(field: Field) -> impl Future<Item = (Bytes, String), Error = Error> {
     let content_disposition: ContentDisposition = field.content_disposition().unwrap();
     // Get filename, ex: file.fake.extension
     let filename: String = String::from(content_disposition.get_filename().unwrap());
@@ -45,10 +31,10 @@ fn create_bytes(field: Field) -> impl Future<Item=(Bytes, String), Error=Error> 
                 last_chunk.extend(current_chunk);
                 Ok(last_chunk)
             })
-                .map_err(|e| match e {
-                    error::BlockingError::Error(e) => e,
-                    error::BlockingError::Canceled => MultipartError::Incomplete,
-                })
+            .map_err(|e| match e {
+                error::BlockingError::Error(e) => e,
+                error::BlockingError::Canceled => MultipartError::Incomplete,
+            })
         })
         .map(|bytes| (bytes, filename))
         .map_err(error::ErrorInternalServerError)
@@ -57,7 +43,7 @@ fn create_bytes(field: Field) -> impl Future<Item=(Bytes, String), Error=Error> 
 pub fn upload(
     multipart: Multipart,
     client: web::Data<Arc<reqwest::Client>>,
-) -> impl Future<Item=HttpResponse, Error=Error> {
+) -> impl Future<Item = HttpResponse, Error = Error> {
     let arc_client = client;
     // For each multipart field
     multipart

@@ -3,16 +3,30 @@ schema {
   mutation: Mutation
 }
 
+union BaseResponseData = String | User | UserType
+
+type BaseResponse {
+  error: Boolean!
+  statusCode: Int!
+  timestamp: DateTimeUtc!
+  message: String!
+  data: BaseResponseData
+}
+
 type User {
   id: ID! @juniper(ownership: "owned")
   email: String!
   username: String!
   password: String!
-  userType: UserType!
+  userType: UserType!  @juniper(ownership: "owned")
 }
 
 type UserType {
-  id: String!
+  id: ID!  @juniper(ownership: "owned")
   name: String!
   grants: [String!]!
+}
+
+type Query {
+  login: User
 }

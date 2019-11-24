@@ -63,7 +63,7 @@ fn increment(session: Session) -> Result<HttpResponse> {
 }
 */
 
-fn signup() {}
+// fn signup() {}
 
 fn login(user_id: web::Json<Identity>, session: Session) -> Result<HttpResponse> {
     let id = user_id.into_inner().user_id;
@@ -93,12 +93,12 @@ fn logout(session: Session) -> Result<HttpResponse> {
 
 fn init() -> (SocketAddrV4, String, Vec<u8>) {
     // Create a socket address from listen_at
-    let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
+    let address: SocketAddrV4 = LISTEN_AT.parse::<SocketAddrV4>().unwrap();
     // Session
     let redis_host: String = format!(
         "{}:{}",
-        &REDIS_HOST.parse::<String>().unwrap(),
-        &REDIS_PORT.parse::<String>().unwrap()
+        REDIS_HOST.parse::<String>().unwrap(),
+        REDIS_PORT.parse::<String>().unwrap()
     );
     let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
     // Logger utility
@@ -114,13 +114,11 @@ fn main() -> io::Result<()> {
         App::new()
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
-            .service(
-                web::scope(&API_ROUTE)
-                    // .service(resource("/").route(get().to(index)))
-                    // .service(resource("/increment").route(post().to(increment)))
-                    .service(resource(&LOGIN_ROUTE).route(post().to(login)))
-                    .service(resource(&LOGOUT_ROUTE).route(post().to(logout))),
-            )
+            .service(web::scope(&API_ROUTE))
+            // .service(resource("/").route(get().to(index)))
+            // .service(resource("/increment").route(post().to(increment)))
+            .service(resource(&LOGIN_ROUTE).route(post().to(login)))
+            .service(resource(&LOGOUT_ROUTE).route(post().to(logout)))
     })
     .bind(address)?
     .run()

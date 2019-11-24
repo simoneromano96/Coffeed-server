@@ -3,6 +3,16 @@ schema {
   mutation: Mutation
 }
 
+union BaseResponseData = Coffee | Coffees
+
+type BaseResponse {
+  error: Boolean!
+  statusCode: Int!
+  timestamp: DateTimeUtc!
+  message: String!
+  data: BaseResponseData
+}
+
 scalar DateTimeUtc @juniper(with_time_zone: false)
 
 type Coffee {
@@ -15,16 +25,6 @@ type Coffee {
 
 type Coffees {
   coffees: [Coffee!]!
-}
-
-union BaseResponseData = Coffee | Coffees
-
-type BaseResponse {
-  error: Boolean!
-  statusCode: Int!
-  timestamp: DateTimeUtc!
-  message: String!
-  data: BaseResponseData
 }
 
 input CoffeeInput {

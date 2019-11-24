@@ -116,17 +116,17 @@ fn main() -> io::Result<()> {
             .wrap(middleware::Logger::default())
             .data(http_client.clone())
             .service(
-                web::scope(&API_ROUTE)
+                web::scope(&String::from(API_ROUTE))
                     .service(
-                        web::resource(&UPLOAD_ROUTE)
+                        web::resource(&String::from(API_ROUTE))
                             .route(web::post().to_async(upload_service::upload)),
                     )
                     .service(
                         web::resource(&public_route)
                             .route(web::get().to(upload_service::public_files)),
                     )
-                    .service(web::resource(&LOGIN_ROUTE).route(web::get().to(login)))
-                    .service(web::resource(&LOGOUT_ROUTE).route(web::post().to(logout))),
+                    .service(web::resource(&String::from(API_ROUTE)).route(web::get().to(login)))
+                    .service(web::resource(&String::from(API_ROUTE)).route(web::post().to(logout))),
             )
     })
     .bind(address)?
