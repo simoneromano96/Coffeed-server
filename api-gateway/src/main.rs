@@ -78,7 +78,13 @@ fn logout(session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResp
     HttpResponse::Ok().json(message)
 }
 
-fn init() -> (SocketAddrV4, String, String, Vec<u8>, Arc<reqwest::Client>) {
+fn init() -> (
+    SocketAddrV4,
+    String,
+    String,
+    Vec<u8>,
+    Arc<actix_web::client::Client>,
+) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
     // Add a global listening to /public*
@@ -94,8 +100,9 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>, Arc<reqwest::Client>) {
     env_logger::init();
     // Client for requests
     // TODO: Custom http client
-    let client_builder: ClientBuilder = Client::builder();
-    let http_client = Arc::new(client_builder.build().unwrap());
+    // let client_builder: ClientBuilder = Client::builder();
+    // let http_client = Arc::new(client_builder.build().unwrap());
+    let http_client = Arc::new(actix_web::client::Client::new());
 
     (
         address,
@@ -114,7 +121,7 @@ fn main() -> io::Result<()> {
         App::new()
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
-            .data(http_client.clone())
+            // .data(http_client.clone())
             .service(
                 web::scope(&(API_ROUTE.parse::<String>().unwrap()))
                     .service(
@@ -123,7 +130,7 @@ fn main() -> io::Result<()> {
                     )
                     .service(
                         web::resource(&public_route)
-                            .route(web::get().to(upload_service::public_files)),
+                            .route(web::get().to_async(upload_service::public_files)),
                     )
                     .service(
                         web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))

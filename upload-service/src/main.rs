@@ -22,7 +22,8 @@ lazy_static::lazy_static! {
 }
 
 fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
-    let content_disposition: ContentDisposition = field.content_disposition().unwrap();
+    let content_disposition: ContentDisposition =
+        ContentDisposition::from(field.content_disposition().unwrap());
     let filename: &str = content_disposition.get_filename().unwrap(); // filename.fake.extension
     let splitted: Vec<&str> = filename.split('.').collect(); // [filename, extension]
     let file_extension: &str = splitted.last().unwrap(); // extension
@@ -50,8 +51,9 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                 // fs operations are blocking, we have to execute writes
                 // on threadpool
                 web::block(move || {
-                    file.write_all(bytes.as_ref())
-                        .map_err(|e| MultipartError::Payload(error::PayloadError::Io(e)))?;
+                    file.write_all(bytes.as_ref()).map_err(|e| {
+                        MultipartError::Payload(PayloadError::from(error::PayloadError::Io(e)))
+                    })?;
                     // acc += bytes.len() as i64;
                     Ok(file)
                 })

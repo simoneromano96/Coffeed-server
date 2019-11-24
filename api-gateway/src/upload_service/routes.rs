@@ -6,8 +6,7 @@ use actix_web::{
     HttpResponse,
 };
 use futures::{Future, Stream};
-use reqwest::multipart::Form;
-use reqwest::{self, multipart::Part, Response, Url};
+use reqwest::{self, multipart::Form, multipart::Part, Response, Url};
 use std::{io::Read, sync::Arc};
 
 // Evaluate env vars only once
@@ -42,9 +41,9 @@ fn create_bytes(field: Field) -> impl Future<Item = (Bytes, String), Error = Err
 
 pub fn upload(
     multipart: Multipart,
-    client: web::Data<Arc<reqwest::Client>>,
+    //client: web::Data<Arc<reqwest::Client>>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
-    let arc_client = client;
+    //let arc_client = client;
     // For each multipart field
     multipart
         .map_err(error::ErrorInternalServerError)
@@ -53,15 +52,16 @@ pub fn upload(
         .collect()
         .map(|couples: Vec<(Bytes, String)>| {
             // Create url string
+            /*
             let destination_address_string: String = format!(
                 "{}{}{}",
-                UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
-                API_ROUTE.parse::<String>().unwrap(),
-                UPLOAD_ROUTE.parse::<String>().unwrap(),
+                &UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
+                &API_ROUTE.parse::<String>().unwrap(),
+                &UPLOAD_ROUTE.parse::<String>().unwrap(),
             );
             // Then Parse it into URL
             let destination_address: Url = destination_address_string.parse().unwrap();
-            let mut request: Form = reqwest::multipart::Form::new();
+            let mut request: Form = Form::new();
 
             for (bytes, filename) in couples {
                 let native_bytes: &[u8] = bytes.as_ref();
@@ -77,8 +77,8 @@ pub fn upload(
                 .unwrap();
             let photos: Vec<String> = response.json().unwrap();
             let upload_response: models::UploadResponse = models::UploadResponse { data: photos };
-
-            HttpResponse::Ok().json(upload_response)
+            */
+            HttpResponse::Ok().json("upload_response")
         })
         .map_err(|e| {
             println!("failed: {}", e);
@@ -88,25 +88,55 @@ pub fn upload(
 
 pub fn public_files(
     request: HttpRequest,
-    client: web::Data<Arc<reqwest::Client>>,
-) -> Result<HttpResponse, Error> {
-    let arc_client = client;
+    //client: web::Data<actix_web::client::Client>,
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    // let arc_client = client;
     let full_uri: &Uri = request.uri();
     // Path already includes /api
     let path = full_uri.path();
     // Create url string
     let destination_address_string: String = format!(
         "{}{}",
-        UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
-        path.parse::<String>().unwrap(),
+        &UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
+        &path.parse::<String>().unwrap(),
     );
     // Then Parse it into URL
-    let destination_address: Url = destination_address_string.parse().unwrap();
+    let destination_address: Uri = destination_address_string.parse::<Uri>().unwrap();
 
-    let mut response: Response = arc_client.get(destination_address).send().unwrap();
-    let mut buffer: Vec<u8> = Vec::new();
-    response
-        .read_to_end(&mut buffer)
-        .map(|_result| HttpResponse::Ok().body(buffer))
+    // let mut response: Response = arc_client.get(destination_address).send().unwrap();
+    // let mut result = arc_client.get("https://www.google.com").send();
+    // let result = reqwest::get("https://www.google.com");
+
+    let client = actix_web::client::Client::new();
+
+    client
+        .get(destination_address)
+        .send()
         .map_err(Error::from)
+        .map(|mut res| {
+            let mut client_resp = HttpResponse::build(res.status());
+
+            res.body()
+                .into_stream()
+                .concat2()
+                .map(move |b| client_resp.body(b))
+                .map_err(|e| e.into())
+        })
+        .flatten()
+
+    /*
+    match result {
+        Ok(mut response) => {
+            let mut buffer: Vec<u8> = Vec::new();
+            response
+                .read_to_end(&mut buffer)
+                .map(|_result| HttpResponse::Ok().body(buffer))
+                .map_err(Error::from)
+        }
+        Err(error) => {
+            println!("{:?}", error.to_string());
+            Err(error::ErrorInternalServerError(error.to_string()))
+        }
+    }
+    */
 }
