@@ -10,13 +10,43 @@ use std::sync::Arc;
 
 graphql_schema_from_file!("src/graphql/schema.graphql");
 
-pub struct Context {
-    db_client: Client,
-}
+pub struct Context {}
+
 impl juniper::Context for Context {}
 
 pub struct Query;
 pub struct Mutation;
+
+//#[derive(Serialize, Deserialize)]
+pub struct BaseResponse {
+    pub error: bool,
+    pub status_code: i32,
+    pub timestamp: NaiveDateTime,
+    pub message: String,
+    pub data: Option<BaseResponseData>,
+}
+
+impl BaseResponseFields for BaseResponse {
+    fn field_error(&self, _: &Executor<'_, Context>) -> FieldResult<&bool> {
+        Ok(&self.error)
+    }
+    fn field_status_code(&self, _: &Executor<'_, Context>) -> FieldResult<&i32> {
+        Ok(&self.status_code)
+    }
+    fn field_timestamp(&self, _: &Executor<'_, Context>) -> FieldResult<&NaiveDateTime> {
+        Ok(&self.timestamp)
+    }
+    fn field_message(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
+        Ok(&self.message)
+    }
+    fn field_data(
+        &self,
+        _: &Executor<'_, Context>,
+        _parent: &juniper_from_schema::QueryTrail<BaseResponseData, juniper_from_schema::Walked>,
+    ) -> FieldResult<&Option<BaseResponseData>> {
+        Ok(&self.data)
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct User {
@@ -78,5 +108,53 @@ impl UserTypeFields for UserType {
     }
     fn field_grants(&self, _: &Executor<'_, Context>) -> FieldResult<&Vec<String>> {
         Ok(&self.grants)
+    }
+}
+
+impl QueryFields for Query {
+    fn field_query_test(
+        &self,
+        _executor: &Executor<'_, Context>,
+        _trail: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
+    ) -> FieldResult<BaseResponse> {
+        let user_type: UserType = UserType {
+            id: ObjectId::new().unwrap(),
+            name: String::from(""),
+            grants: vec![],
+        };
+
+        let response: BaseResponse = BaseResponse {
+            error: false,
+            status_code: 200,
+            timestamp: Utc::now().naive_utc(),
+            message: String::from("Created successfully"),
+            data: Some(BaseResponseData::from(user_type)),
+        };
+
+        Ok(response)
+    }
+}
+
+impl MutationFields for Mutation {
+    fn field_mutation_test(
+        &self,
+        _executor: &Executor<'_, Context>,
+        _trail: &juniper_from_schema::QueryTrail<'_, BaseResponse, juniper_from_schema::Walked>,
+    ) -> FieldResult<BaseResponse> {
+        let user_type: UserType = UserType {
+            id: ObjectId::new().unwrap(),
+            name: String::from(""),
+            grants: vec![],
+        };
+
+        let response: BaseResponse = BaseResponse {
+            error: false,
+            status_code: 200,
+            timestamp: Utc::now().naive_utc(),
+            message: String::from("Created successfully"),
+            data: Some(BaseResponseData::from(user_type)),
+        };
+
+        Ok(response)
     }
 }

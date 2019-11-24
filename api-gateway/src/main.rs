@@ -1,5 +1,5 @@
 // Modules
-pub mod auth_service;
+// pub mod auth_service;
 pub mod models;
 pub mod upload_service;
 
@@ -116,17 +116,23 @@ fn main() -> io::Result<()> {
             .wrap(middleware::Logger::default())
             .data(http_client.clone())
             .service(
-                web::scope(&String::from(API_ROUTE))
+                web::scope(&(API_ROUTE.parse::<String>().unwrap()))
                     .service(
-                        web::resource(&String::from(API_ROUTE))
+                        web::resource(&(API_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to_async(upload_service::upload)),
                     )
                     .service(
                         web::resource(&public_route)
                             .route(web::get().to(upload_service::public_files)),
                     )
-                    .service(web::resource(&String::from(API_ROUTE)).route(web::get().to(login)))
-                    .service(web::resource(&String::from(API_ROUTE)).route(web::post().to(logout))),
+                    .service(
+                        web::resource(&(API_ROUTE.parse::<String>().unwrap()))
+                            .route(web::get().to(login)),
+                    )
+                    .service(
+                        web::resource(&(API_ROUTE.parse::<String>().unwrap()))
+                            .route(web::post().to(logout)),
+                    ),
             )
     })
     .bind(address)?

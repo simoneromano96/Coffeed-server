@@ -3,7 +3,9 @@ schema {
   mutation: Mutation
 }
 
-union BaseResponseData = String | User | UserType
+scalar DateTimeUtc @juniper(with_time_zone: false)
+
+union BaseResponseData = User | UserType
 
 type BaseResponse {
   error: Boolean!
@@ -28,5 +30,9 @@ type UserType {
 }
 
 type Query {
-  login: User
+  queryTest: BaseResponse! @juniper(ownership: "owned")
+}
+
+type Mutation {
+  mutationTest: BaseResponse! @juniper(ownership: "owned")
 }

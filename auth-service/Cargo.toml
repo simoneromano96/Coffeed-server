@@ -11,6 +11,8 @@ edition = "2018"
 mongodb="0.4.0"
 # Actix
 actix-web = "1.0.9"
+# Actix identity
+actix-identity = "0.1.0"
 # Sessions
 actix-session = "0.2.0"
 # Redis session

@@ -7,11 +7,14 @@
 mod graphql;
 
 // Crates
+use actix_identity::IdentityService;
 use actix_redis::RedisSession;
 use actix_session::Session;
 use actix_web::{
-    middleware, web,
-    web::{get, post, resource},
+    middleware,
+    middleware::Compress,
+    web,
+    web::{get, post, resource, scope},
     App, HttpResponse, HttpServer, Result,
 };
 use serde::{Deserialize, Serialize};
@@ -109,12 +112,14 @@ fn init() -> (SocketAddrV4, String, Vec<u8>) {
 
 fn main() -> io::Result<()> {
     let (address, redis_host, session_secret) = init();
+    //.wrap(RedisSession::new(redis_host.clone(), &session_secret))
 
     HttpServer::new(move || {
         App::new()
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
+            .wrap(Compress::default())
             .wrap(middleware::Logger::default())
-            .service(web::scope(&API_ROUTE))
+            .service(scope(&API_ROUTE))
             // .service(resource("/").route(get().to(index)))
             // .service(resource("/increment").route(post().to(increment)))
             .service(resource(&LOGIN_ROUTE).route(post().to(login)))
