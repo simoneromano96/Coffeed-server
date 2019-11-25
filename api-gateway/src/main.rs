@@ -6,12 +6,9 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::{
-    client::{Client, ClientBuilder},
-    middleware, web, App, HttpServer,
-};
+use actix_web::{middleware, web, App, HttpServer};
 use env_logger;
-// use reqwest::{self, Client, ClientBuilder};
+use reqwest::{self, Client, ClientBuilder};
 use serde_derive::{Deserialize, Serialize};
 use std::{env, io, net::SocketAddrV4};
 
@@ -81,7 +78,7 @@ pub struct AppState {
     http_client: Client,
 }
 
-fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
+fn init() -> (SocketAddrV4, String, String, Vec<u8>, Client) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
     // Add a global listening to /public*
@@ -96,25 +93,33 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Logger utility
     env_logger::init();
 
-    (address, public_route, redis_host, session_secret)
+    (
+        address,
+        public_route,
+        redis_host,
+        session_secret,
+        init_client(),
+    )
 }
 
 fn init_client() -> Client {
     // Client for requests
     // TODO: Custom http client
-    let client_builder: ClientBuilder = ClientBuilder::default();
-    client_builder.finish()
+    let client_builder: ClientBuilder = ClientBuilder::new()
+        .use_rustls_tls()
+        .gzip(true)
+        .cookie_store(true);
+
+    client_builder.build().unwrap()
 }
 
 fn main() -> io::Result<()> {
-    let (address, public_route, redis_host, session_secret) = init();
+    let (address, public_route, redis_host, session_secret, http_client) = init();
 
     // Start http server
     HttpServer::new(move || {
         App::new()
-            .data(AppState {
-                http_client: init_client(),
-            })
+            .data(AppState { http_client })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(

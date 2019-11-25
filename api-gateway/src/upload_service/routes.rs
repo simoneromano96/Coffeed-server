@@ -1,14 +1,12 @@
 // Crates
 use crate::{models, AppState};
 use actix_multipart::{Field, Multipart, MultipartError};
-use actix_multipart_rfc7578::client::{self, multipart};
 use actix_web::{
     error, http::header::ContentDisposition, http::Uri, web, web::Bytes, Error, HttpRequest,
     HttpResponse,
 };
 use futures::{Future, Stream};
-// use reqwest::{self, multipart::Form, multipart::Part, Response, Url};
-use actix_multipart_rfc7578::client::multipart::Form;
+use reqwest::{self, multipart::Form, multipart::Part, Response, Url};
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufReader, Write};
@@ -64,37 +62,27 @@ pub fn upload(
                 &UPLOAD_ROUTE.parse::<String>().unwrap(),
             );
             // Then Parse it into URL
-            let destination_address: Uri = destination_address_string.parse::<Uri>().unwrap();
+            let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
             // Create form
-
-            let mut form = multipart::Form::default();
+            let mut form: Form = Form::new();
             // Add form data
-            // TODO: CHANGE THIS!!
             for (bytes, filename) in couples {
-                let mut file = File::create(filename.clone()).unwrap();
-                file.write_all(bytes.as_ref()).unwrap();
-                // let native_bytes: &[u8] = bytes.borrow();
-                // let native_bytes: &[u8] = &bytes[..];
-                // let filename: String = filename.parse().unwrap();
-                form.add_file(filename.clone(), filename.clone()).unwrap();
-                // form.add_reader(filename, buffer);
+                let part = Part::bytes(bytes.to_vec()).file_name(filename.clone());
+                form = form.part(filename.clone(), part);
             }
+
             let http_client = arc_client;
 
-            http_client
-                .post(destination_address)
-                .content_type(form.content_type())
-                .send_stream(multipart::Body::from(form))
-                .map_err(Error::from)
-                .map(|mut res| {
-                    let mut client_resp = HttpResponse::build(res.status());
-                    res.body()
-                        .into_stream()
-                        .concat2()
-                        .map(move |b| client_resp.body(b))
-                        .map_err(|e| e.into())
-                })
-                .flatten()
+            web::block(move || {
+                http_client
+                    .post(destination_address)
+                    .multipart(form)
+                    .send()
+                    .map(|res| Ok("test"))
+                    .map_err(|e| Err(e.to_string()))
+            })
+            .map_err(|e| Error::from(e))
+            .map(|r| HttpResponse::Ok().json("asd"))
         })
         .map_err(|e| {
             println!("failed: {}", e);
@@ -119,21 +107,16 @@ pub fn public_files(
         &path.parse::<String>().unwrap(),
     );
     // Then Parse it into URL
-    let destination_address: Uri = destination_address_string.parse::<Uri>().unwrap();
+    let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
     // let mut response: Response = arc_client.get(destination_address).send().unwrap();
-
-    http_client
-        .get(destination_address)
-        .send()
-        .map_err(Error::from)
-        .map(|mut res| {
-            let mut client_resp = HttpResponse::build(res.status());
-            res.body()
-                .into_stream()
-                .concat2()
-                .map(move |b| client_resp.body(b))
-                .map_err(|e| e.into())
-        })
-        .flatten()
+    web::block(move || {
+        http_client
+            .get(destination_address)
+            .send()
+            .map(|res| Ok("test"))
+            .map_err(|e| Err(e.to_string()))
+    })
+    .map_err(|e| Error::from(e))
+    .map(|r| HttpResponse::Ok().json("asd"))
 }
