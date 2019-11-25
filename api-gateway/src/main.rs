@@ -6,7 +6,12 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{
+    client::{Client, ClientBuilder},
+    middleware,
+    web::{self, Data},
+    App, HttpRequest, HttpResponse, HttpServer,
+};
 use env_logger;
 // use reqwest::{self, Client, ClientBuilder};
 use serde_derive::{Deserialize, Serialize};
@@ -44,11 +49,8 @@ struct Identity {
     user_id: String,
 }
 
-fn login(
-    req: HttpRequest,
-    session: Session,
-    client: web::Data<Arc<reqwest::Client>>,
-) -> HttpResponse {
+/*
+fn login(req: HttpRequest, session: Session, client: Data<Arc<reqwest::Client>>) -> HttpResponse {
     let id = String::from("123");
     session.set("user_id", &id).unwrap();
     session.renew();
@@ -64,7 +66,7 @@ fn login(
     })
 }
 
-fn logout(session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResponse {
+fn logout(session: Session, client: Data<Arc<reqwest::Client>>) -> HttpResponse {
     let id: Option<String> = session.get("user_id").unwrap();
     let message: String;
     if let Some(x) = id {
@@ -74,6 +76,11 @@ fn logout(session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResp
         message = String::from("Could not log out anonymous user");
     }
     HttpResponse::Ok().json(message)
+}
+*/
+
+pub struct AppState {
+    http_client: Client,
 }
 
 fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
@@ -91,23 +98,31 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Logger utility
     env_logger::init();
 
-    (address, public_route, redis_host, session_secret)
+    (
+        address,
+        public_route,
+        redis_host,
+        session_secret
+    )
 }
 
-fn init_client() -> Arc<actix_web::client::Client> {
+fn init_client() -> Client {
     // Client for requests
     // TODO: Custom http client
-    Arc::new(actix_web::client::Client::new())
+    let client_builder: ClientBuilder = ClientBuilder::default();
+    client_builder.finish()
 }
 
 fn main() -> io::Result<()> {
     let (address, public_route, redis_host, session_secret) = init();
+    // let data = Data::new(http_client);
 
     // Start http server
     HttpServer::new(move || {
-        let http_client = init_client();
         App::new()
-            .data(http_client.clone())
+            //.register_data(data)
+            // .data(data)
+            .data(AppState { http_client: init_client() })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(
@@ -119,15 +134,14 @@ fn main() -> io::Result<()> {
                     .service(
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
-                    )
-                    .service(
-                        web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                            .route(web::get().to(login)),
-                    )
-                    .service(
-                        web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to(logout)),
-                    ),
+                    ), /*.service(
+                           web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
+                               .route(web::get().to(login)),
+                       )
+                       .service(
+                           web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                               .route(web::post().to(logout)),
+                       )*/
             )
     })
     .bind(address)?

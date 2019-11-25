@@ -1,5 +1,5 @@
 // Crates
-use crate::models;
+use crate::{models, AppState};
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::{
     error, http::header::ContentDisposition, http::Uri, web, web::Bytes, Error, HttpRequest,
@@ -41,7 +41,7 @@ fn create_bytes(field: Field) -> impl Future<Item = (Bytes, String), Error = Err
 
 pub fn upload(
     multipart: Multipart,
-    //client: web::Data<Arc<reqwest::Client>>,
+    app_state: web::Data<AppState>
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     //let arc_client = client;
     // For each multipart field
@@ -88,8 +88,9 @@ pub fn upload(
 
 pub fn public_files(
     request: HttpRequest,
-    http_client: web::Data<actix_web::client::Client>,
+    app_state: web::Data<AppState>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
+    let http_client = &app_state.http_client;
     // let arc_client = client;
     let full_uri: &Uri = request.uri();
     // Path already includes /api
