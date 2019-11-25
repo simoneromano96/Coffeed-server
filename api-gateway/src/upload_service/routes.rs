@@ -88,7 +88,7 @@ pub fn upload(
 
 pub fn public_files(
     request: HttpRequest,
-    //client: web::Data<actix_web::client::Client>,
+    http_client: web::Data<actix_web::client::Client>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     // let arc_client = client;
     let full_uri: &Uri = request.uri();
@@ -104,12 +104,8 @@ pub fn public_files(
     let destination_address: Uri = destination_address_string.parse::<Uri>().unwrap();
 
     // let mut response: Response = arc_client.get(destination_address).send().unwrap();
-    // let mut result = arc_client.get("https://www.google.com").send();
-    // let result = reqwest::get("https://www.google.com");
 
-    let client = actix_web::client::Client::new();
-
-    client
+    http_client
         .get(destination_address)
         .send()
         .map_err(Error::from)
@@ -123,20 +119,4 @@ pub fn public_files(
                 .map_err(|e| e.into())
         })
         .flatten()
-
-    /*
-    match result {
-        Ok(mut response) => {
-            let mut buffer: Vec<u8> = Vec::new();
-            response
-                .read_to_end(&mut buffer)
-                .map(|_result| HttpResponse::Ok().body(buffer))
-                .map_err(Error::from)
-        }
-        Err(error) => {
-            println!("{:?}", error.to_string());
-            Err(error::ErrorInternalServerError(error.to_string()))
-        }
-    }
-    */
 }

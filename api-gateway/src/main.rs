@@ -6,11 +6,9 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::HttpRequest;
-use actix_web::HttpResponse;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer};
 use env_logger;
-use reqwest::{self, Client, ClientBuilder};
+// use reqwest::{self, Client, ClientBuilder};
 use serde_derive::{Deserialize, Serialize};
 use std::{env, io, net::SocketAddrV4, sync::Arc};
 
@@ -78,13 +76,7 @@ fn logout(session: Session, client: web::Data<Arc<reqwest::Client>>) -> HttpResp
     HttpResponse::Ok().json(message)
 }
 
-fn init() -> (
-    SocketAddrV4,
-    String,
-    String,
-    Vec<u8>,
-    Arc<actix_web::client::Client>,
-) {
+fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
     // Add a global listening to /public*
@@ -98,30 +90,26 @@ fn init() -> (
     let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
     // Logger utility
     env_logger::init();
+
+    (address, public_route, redis_host, session_secret)
+}
+
+fn init_client() -> Arc<actix_web::client::Client> {
     // Client for requests
     // TODO: Custom http client
-    // let client_builder: ClientBuilder = Client::builder();
-    // let http_client = Arc::new(client_builder.build().unwrap());
-    let http_client = Arc::new(actix_web::client::Client::new());
-
-    (
-        address,
-        public_route,
-        redis_host,
-        session_secret,
-        http_client,
-    )
+    Arc::new(actix_web::client::Client::new())
 }
 
 fn main() -> io::Result<()> {
-    let (address, public_route, redis_host, session_secret, http_client) = init();
+    let (address, public_route, redis_host, session_secret) = init();
 
     // Start http server
     HttpServer::new(move || {
+        let http_client = init_client();
         App::new()
+            .data(http_client.clone())
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
-            // .data(http_client.clone())
             .service(
                 web::scope(&(API_ROUTE.parse::<String>().unwrap()))
                     .service(
