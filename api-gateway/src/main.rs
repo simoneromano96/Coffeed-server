@@ -8,9 +8,7 @@ use actix_redis::RedisSession;
 use actix_session::Session;
 use actix_web::{
     client::{Client, ClientBuilder},
-    middleware,
-    web,
-    App, HttpServer,
+    middleware, web, App, HttpServer,
 };
 use env_logger;
 // use reqwest::{self, Client, ClientBuilder};
@@ -98,12 +96,7 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Logger utility
     env_logger::init();
 
-    (
-        address,
-        public_route,
-        redis_host,
-        session_secret
-    )
+    (address, public_route, redis_host, session_secret)
 }
 
 fn init_client() -> Client {
@@ -119,7 +112,9 @@ fn main() -> io::Result<()> {
     // Start http server
     HttpServer::new(move || {
         App::new()
-            .data(AppState { http_client: init_client() })
+            .data(AppState {
+                http_client: init_client(),
+            })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(

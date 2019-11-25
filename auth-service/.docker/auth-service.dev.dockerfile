@@ -4,9 +4,8 @@ WORKDIR /auth-service
 
 RUN cargo install cargo-watch
 
-COPY . .
-
-RUN cargo install --path .
+# COPY . .
+# RUN cargo install --path .
 
 EXPOSE 80
 

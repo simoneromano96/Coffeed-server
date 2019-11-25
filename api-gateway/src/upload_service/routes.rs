@@ -8,6 +8,10 @@ use actix_web::{
 };
 use futures::{Future, Stream};
 // use reqwest::{self, multipart::Form, multipart::Part, Response, Url};
+use actix_multipart_rfc7578::client::multipart::Form;
+use std::borrow::Borrow;
+use std::fs::File;
+use std::io::{BufReader, Write};
 use std::{io::Read, sync::Arc};
 
 // Evaluate env vars only once
@@ -42,7 +46,7 @@ fn create_bytes(field: Field) -> impl Future<Item = (Bytes, String), Error = Err
 
 pub fn upload(
     multipart: Multipart,
-    app_state: web::Data<AppState>
+    app_state: web::Data<AppState>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     let arc_client = app_state.http_client.clone();
     // For each multipart field
@@ -62,12 +66,18 @@ pub fn upload(
             // Then Parse it into URL
             let destination_address: Uri = destination_address_string.parse::<Uri>().unwrap();
             // Create form
+
             let mut form = multipart::Form::default();
             // Add form data
+            // TODO: CHANGE THIS!!
             for (bytes, filename) in couples {
-                let native_bytes: &[u8] = &bytes[..];
-                let filename: String = filename;
-                form.add_reader(filename.clone(), native_bytes);
+                let mut file = File::create(filename.clone()).unwrap();
+                file.write_all(bytes.as_ref()).unwrap();
+                // let native_bytes: &[u8] = bytes.borrow();
+                // let native_bytes: &[u8] = &bytes[..];
+                // let filename: String = filename.parse().unwrap();
+                form.add_file(filename.clone(), filename.clone()).unwrap();
+                // form.add_reader(filename, buffer);
             }
             let http_client = arc_client;
 
@@ -77,19 +87,20 @@ pub fn upload(
                 .send_stream(multipart::Body::from(form))
                 .map_err(Error::from)
                 .map(|mut res| {
-                let mut client_resp = HttpResponse::build(res.status());
-                res.body()
-                    .into_stream()
-                    .concat2()
-                    .map(move |b| client_resp.body(b))
-                    .map_err(|e| e.into())
+                    let mut client_resp = HttpResponse::build(res.status());
+                    res.body()
+                        .into_stream()
+                        .concat2()
+                        .map(move |b| client_resp.body(b))
+                        .map_err(|e| e.into())
                 })
                 .flatten()
         })
         .map_err(|e| {
             println!("failed: {}", e);
             e
-        }).flatten()
+        })
+        .flatten()
 }
 
 pub fn public_files(
