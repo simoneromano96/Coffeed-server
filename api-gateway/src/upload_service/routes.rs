@@ -73,22 +73,14 @@ pub fn upload(
 
             let http_client = arc_client;
 
-            web::block(move || {
-                http_client
-                    .post(destination_address)
-                    .multipart(form)
-                    .send()
-                    .map(|res| Ok("test"))
-                    .map_err(|e| Err(e.to_string()))
-            })
-            .map_err(|e| Error::from(e))
-            .map(|r| HttpResponse::Ok().json("asd"))
+            web::block(move || http_client.post(destination_address).multipart(form).send())
+                .map(|res| Ok("hello"))
+                .map_err(|e| Error::from(e))
         })
         .map_err(|e| {
             println!("failed: {}", e);
             e
         })
-        .flatten()
 }
 
 pub fn public_files(
@@ -110,13 +102,7 @@ pub fn public_files(
     let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
     // let mut response: Response = arc_client.get(destination_address).send().unwrap();
-    web::block(move || {
-        http_client
-            .get(destination_address)
-            .send()
-            .map(|res| Ok("test"))
-            .map_err(|e| Err(e.to_string()))
-    })
-    .map_err(|e| Error::from(e))
-    .map(|r| HttpResponse::Ok().json("asd"))
+    web::block(move || http_client.get(destination_address).send())
+        .map(|res| Ok("hello"))
+        .map_err(|e| Error::from(e))
 }
