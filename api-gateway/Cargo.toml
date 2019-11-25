@@ -13,6 +13,8 @@ futures="^0.1.29"
 actix-http="^0.2.11"
 lazy_static="^1.4.0"
 actix-multipart="^0.1.4"
+# Actix client multipart
+actix-multipart-rfc7578 = "0.2.1"
 # url="^2.1.0"
 # bytes="^0.4.12"
 env_logger = "^0.7.1"
@@ -26,7 +28,7 @@ actix-session = "0.2.0"
 actix-redis = { version = "0.7.0", features = ["web"] }
 
 # Use rust-native tls
-[dependencies.reqwest]
-version="0.9.19"
-default-features = false
-features=["rustls-tls"]
+# [dependencies.reqwest]
+# version="0.9.19"
+# default-features = false
+# features=["rustls-tls"]

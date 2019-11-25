@@ -9,13 +9,13 @@ use actix_session::Session;
 use actix_web::{
     client::{Client, ClientBuilder},
     middleware,
-    web::{self, Data},
-    App, HttpRequest, HttpResponse, HttpServer,
+    web,
+    App, HttpServer,
 };
 use env_logger;
 // use reqwest::{self, Client, ClientBuilder};
 use serde_derive::{Deserialize, Serialize};
-use std::{env, io, net::SocketAddrV4, sync::Arc};
+use std::{env, io, net::SocketAddrV4};
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
@@ -115,13 +115,10 @@ fn init_client() -> Client {
 
 fn main() -> io::Result<()> {
     let (address, public_route, redis_host, session_secret) = init();
-    // let data = Data::new(http_client);
 
     // Start http server
     HttpServer::new(move || {
         App::new()
-            //.register_data(data)
-            // .data(data)
             .data(AppState { http_client: init_client() })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
