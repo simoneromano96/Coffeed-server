@@ -44,7 +44,6 @@ struct Identity {
     user_id: String,
 }
 
-/*
 fn login(req: HttpRequest, session: Session, client: Data<Arc<reqwest::Client>>) -> HttpResponse {
     let id = String::from("123");
     session.set("user_id", &id).unwrap();
@@ -72,7 +71,6 @@ fn logout(session: Session, client: Data<Arc<reqwest::Client>>) -> HttpResponse 
     }
     HttpResponse::Ok().json(message)
 }
-*/
 
 pub struct AppState {
     http_client: Client,
@@ -133,14 +131,15 @@ fn main() -> io::Result<()> {
                     .service(
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
-                    ), /* .service(
-                           web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                               .route(web::get().to(login)),
-                       )
-                       .service(
-                           web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                               .route(web::post().to(logout)),
-                       )*/
+                    )
+                    .service(
+                        web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
+                            .route(web::get().to(login)),
+                    )
+                    .service(
+                        web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                            .route(web::post().to(logout)),
+                    ),
             )
     })
     .bind(address)?

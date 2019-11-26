@@ -1,6 +1,4 @@
-// Crates
-use crate::models::UploadResponse;
-use crate::{models, AppState};
+use crate::{models::UploadResponse, AppState};
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::{
     error, http::header::ContentDisposition, http::Uri, web, web::Bytes, Error, HttpRequest,
@@ -8,10 +6,7 @@ use actix_web::{
 };
 use futures::{Future, Stream};
 use reqwest::{self, multipart::Form, multipart::Part, Url};
-use std::borrow::Borrow;
-use std::fs::File;
-use std::io::{BufReader, Write};
-use std::{io::Read, sync::Arc};
+use std::io::Read;
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
