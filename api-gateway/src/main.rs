@@ -78,7 +78,7 @@ pub struct AppState {
     http_client: Client,
 }
 
-fn init() -> (SocketAddrV4, String, String, Vec<u8>, Client) {
+fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
     // Add a global listening to /public*
@@ -98,7 +98,7 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>, Client) {
         public_route,
         redis_host,
         session_secret,
-        init_client(),
+        // init_client(),
     )
 }
 
@@ -114,31 +114,32 @@ fn init_client() -> Client {
 }
 
 fn main() -> io::Result<()> {
-    let (address, public_route, redis_host, session_secret, http_client) = init();
+    let (address, public_route, redis_host, session_secret) = init();
 
     // Start http server
     HttpServer::new(move || {
         App::new()
-            .data(AppState { http_client })
+            .data(AppState {
+                http_client: init_client(),
+            })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(
-                web::scope(&(API_ROUTE.parse::<String>().unwrap()))
-                    .service(
-                        web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to_async(upload_service::upload)),
-                    )
-                    .service(
-                        web::resource(&public_route)
-                            .route(web::get().to_async(upload_service::public_files)),
-                    ), /*.service(
-                           web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                               .route(web::get().to(login)),
-                       )
-                       .service(
-                           web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                               .route(web::post().to(logout)),
-                       )*/
+                web::scope(&(API_ROUTE.parse::<String>().unwrap())).service(
+                    web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
+                        .route(web::post().to_async(upload_service::upload)),
+                ), /*
+                   .service(
+                       web::resource(&public_route)
+                           .route(web::get().to_async(upload_service::public_files)),
+                   ), .service(
+                          web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
+                              .route(web::get().to(login)),
+                      )
+                      .service(
+                          web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                              .route(web::post().to(logout)),
+                      )*/
             )
     })
     .bind(address)?
