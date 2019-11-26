@@ -6,7 +6,7 @@ use actix_web::{
     HttpResponse,
 };
 use futures::{Future, Stream};
-use reqwest::{self, multipart::Form, multipart::Part, Response, Url};
+use reqwest::{self, multipart::Form, multipart::Part, Url};
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufReader, Write};
@@ -73,14 +73,20 @@ pub fn upload(
 
             let http_client = arc_client;
 
-            web::block(move || http_client.post(destination_address).multipart(form).send())
-                .map(|res| Ok("hello"))
-                .map_err(|e| Error::from(e))
+            web::block(move || {
+                let result: Result<reqwest::Response, reqwest::Error> =
+                    http_client.post(destination_address).multipart(form).send();
+                match result {
+                    Ok(response) => Ok(response),
+                    Err(e) => Err(e.to_string()),
+                }
+            })
+            .map(|res: reqwest::Response| {})
+            .map_err(error::ErrorInternalServerError);
+
+            HttpResponse::Ok().json("Hello")
         })
-        .map_err(|e| {
-            println!("failed: {}", e);
-            e
-        })
+        .map_err(error::ErrorInternalServerError)
 }
 
 pub fn public_files(
