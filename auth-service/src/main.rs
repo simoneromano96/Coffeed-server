@@ -4,7 +4,7 @@
 //! At login, the session key changes and session state in cache re-assigns.
 //! At logout, session state in cache is removed and cookie is invalidated.
 // Modules
-mod graphql;
+// mod graphql;
 
 // Crates
 use actix_identity::IdentityService;
@@ -17,6 +17,11 @@ use actix_web::{
     web::{get, post, resource, scope},
     App, HttpResponse, HttpServer, Result,
 };
+use r2d2::Pool;
+use r2d2_mongodb::mongodb::bson;
+use r2d2_mongodb::mongodb::coll::options::IndexOptions;
+use r2d2_mongodb::mongodb::coll::Collection;
+use r2d2_mongodb::{ConnectionOptions, MongodbConnectionManager};
 use serde::{Deserialize, Serialize};
 use std::{io, net::SocketAddrV4};
 
@@ -24,12 +29,20 @@ use std::{io, net::SocketAddrV4};
 lazy_static::lazy_static! {
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
     pub static ref AUTH_SERVICE_PUBLIC_URL: String = std::env::var("AUTH_SERVICE_PUBLIC_URL").unwrap();
+    // Routes
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
     pub static ref LOGIN_ROUTE: String = std::env::var("LOGIN_ROUTE").unwrap();
     pub static ref LOGOUT_ROUTE: String = std::env::var("LOGOUT_ROUTE").unwrap();
+    // Session
     pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
     pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
     pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
+    // Mongodb
+    pub static ref MONGODB_HOST: String = std::env::var("MONGODB_HOST").unwrap();
+    pub static ref MONGODB_PORT: String = std::env::var("MONGODB_PORT").unwrap();
+    pub static ref MONGODB_AUTH_DB: String = std::env::var("MONGODB_AUTH_DB").unwrap();
+    pub static ref MONGODB_AUTH_USERNAME: String = std::env::var("MONGODB_AUTH_USERNAME").unwrap();
+    pub static ref MONGODB_AUTH_PASSWORD: String = std::env::var("MONGODB_AUTH_PASSWORD").unwrap();
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -94,24 +107,96 @@ fn logout(session: Session) -> Result<HttpResponse> {
     }
 }
 
-fn init() -> (SocketAddrV4, String, Vec<u8>) {
+fn create_connection_pool(
+    host: String,
+    port: u16,
+    auth_db: String,
+    auth_username: String,
+    auth_password: String,
+) -> Pool<MongodbConnectionManager> {
+    // Connection manager
+    let manager: MongodbConnectionManager = MongodbConnectionManager::new(
+        ConnectionOptions::builder()
+            .with_host(&host, port)
+            .with_db(&auth_db)
+            .with_auth(&auth_username, &auth_password)
+            .build(),
+    );
+    // Pool
+    let pool: Pool<MongodbConnectionManager> = Pool::builder().build(manager).unwrap();
+}
+
+fn init_db(pool: Pool<MongodbConnectionManager>) {
+    let connection = pool.get().unwrap();
+    let client = connection.client.clone();
+    // Create indexes
+    // UserTypes
+    let mut collection: Collection = db_client.db("authService").collection("users");
+    let mut name_index: IndexOptions = IndexOptions::new();
+    name_index.unique = Some(true);
+    collection
+        .create_index(doc! {"name": 1}, Some(name_index))
+        .unwrap();
+    // Users
+    collection = db_client.db("authService").collection("users");
+    let mut email_index: IndexOptions = IndexOptions::new();
+    email_index.unique = Some(true);
+    let mut username_index: IndexOptions = IndexOptions::new();
+    username_index.unique = Some(true);
+    collection
+        .create_index(doc! {"email": 1}, Some(email_index))
+        .unwrap();
+    collection
+        .create_index(doc! {"username": 1}, Some(username_index))
+        .unwrap();
+    if collection.count(None, None).unwrap() == 0 {
+        let admin = User {
+            id: ObjectId::new().unwrap(),
+            username: String::from("admin"),
+            email: String::from("admin@mail.com"),
+            password: String::from("password"),
+            user_type: String::from("Admin"),
+        };
+        let bson = bson::to_bson(&admin).unwrap();
+        if let bson::Bson::Document(document) = bson {
+            collection.insert_one(document, None).unwrap();
+        }
+    }
+}
+
+fn init() -> (
+    SocketAddrV4,
+    String,
+    Vec<u8>,
+    Pool<MongodbConnectionManager>,
+) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse::<SocketAddrV4>().unwrap();
     // Session
     let redis_host: String = format!(
         "{}:{}",
-        REDIS_HOST.parse::<String>().unwrap(),
-        REDIS_PORT.parse::<String>().unwrap()
+        REDIS_HOST.parse().unwrap(),
+        REDIS_PORT.parse().unwrap()
     );
     let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
     // Logger utility
     env_logger::init();
+    // Connection pool
+    let pool = create_connection_pool(
+        MONGODB_HOST.parse().unwrap(),
+        MONGODB_PORT.parse().unwrap(),
+        MONGODB_AUTH_DB.parse().unwrap(),
+        MONGODB_AUTH_USERNAME.parse().unwrap(),
+        MONGODB_AUTH_PASSWORD.parse().unwrap(),
+    );
+    // Initialise DB
+    init_db(pool.clone());
 
-    (address, redis_host, session_secret)
+    (address, redis_host, session_secret, pool)
 }
 
 fn main() -> io::Result<()> {
-    let (address, redis_host, session_secret) = init();
+    let (address, redis_host, session_secret, pool) = init();
     //.wrap(RedisSession::new(redis_host.clone(), &session_secret))
 
     HttpServer::new(move || {
