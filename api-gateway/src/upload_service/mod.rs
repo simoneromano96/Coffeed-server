@@ -1,3 +1,3 @@
 pub mod routes;
 
-pub use routes::upload;
+pub use routes::{public_files, upload};

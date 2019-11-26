@@ -125,21 +125,22 @@ fn main() -> io::Result<()> {
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(
-                web::scope(&(API_ROUTE.parse::<String>().unwrap())).service(
-                    web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
-                        .route(web::post().to_async(upload_service::upload)),
-                ), /*
-                   .service(
-                       web::resource(&public_route)
-                           .route(web::get().to_async(upload_service::public_files)),
-                   ), .service(
-                          web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                              .route(web::get().to(login)),
-                      )
-                      .service(
-                          web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                              .route(web::post().to(logout)),
-                      )*/
+                web::scope(&(API_ROUTE.parse::<String>().unwrap()))
+                    .service(
+                        web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
+                            .route(web::post().to_async(upload_service::upload)),
+                    )
+                    .service(
+                        web::resource(&public_route)
+                            .route(web::get().to_async(upload_service::public_files)),
+                    ), /* .service(
+                           web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
+                               .route(web::get().to(login)),
+                       )
+                       .service(
+                           web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                               .route(web::post().to(logout)),
+                       )*/
             )
     })
     .bind(address)?

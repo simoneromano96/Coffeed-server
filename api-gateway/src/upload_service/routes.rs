@@ -91,12 +91,11 @@ pub fn upload(
         .map(|data: UploadResponse| HttpResponse::Ok().json(data))
 }
 
-/*
 pub fn public_files(
     request: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
-    let http_client = &app_state.http_client;
+    let http_client = app_state.http_client.clone();
     // let arc_client = client;
     let full_uri: &Uri = request.uri();
     // Path already includes /api
@@ -110,9 +109,19 @@ pub fn public_files(
     // Then Parse it into URL
     let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
-    // let mut response: Response = arc_client.get(destination_address).send().unwrap();
-    web::block(move || http_client.get(destination_address).send())
-        .map(|res| Ok("hello"))
-        .map_err(|e| Error::from(e))
+    web::block(move || {
+        let result: Result<reqwest::Response, reqwest::Error> =
+            http_client.get(destination_address).send();
+
+        match result {
+            Ok(mut response) => {
+                let mut buffer: Vec<u8> = Vec::new();
+                response.read_to_end(&mut buffer).unwrap();
+                Ok(buffer)
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    })
+    .map(|data: Vec<u8>| HttpResponse::Ok().body(data))
+    .map_err(error::ErrorInternalServerError)
 }
-*/
