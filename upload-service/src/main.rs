@@ -1,13 +1,13 @@
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::http::header::ContentDisposition;
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
-use futures::future::{err, Either};
-use futures::{Future, Stream};
+use futures::{
+    future::{err, Either},
+    Future, Stream,
+};
 use lazy_static;
 use nanoid;
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
+use std::{fs, io::Write, path::PathBuf};
 use url::Url;
 
 // Evaluate env vars only once
@@ -51,10 +51,11 @@ fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                 // fs operations are blocking, we have to execute writes
                 // on threadpool
                 web::block(move || {
-                    file.write_all(bytes.as_ref()).map_err(|e| {
-                        MultipartError::Payload(PayloadError::from(error::PayloadError::Io(e)))
-                    })?;
-                    // acc += bytes.len() as i64;
+                    file.write_all(bytes.as_ref())
+                        .map_err(|e: std::io::Error| {
+                            println!("file.write_all failed: {:?}", e);
+                            error::PayloadError::Io(e)
+                        })?;
                     Ok(file)
                 })
                 .map_err(|e: error::BlockingError<MultipartError>| match e {
