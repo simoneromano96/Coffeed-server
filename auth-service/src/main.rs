@@ -45,6 +45,12 @@ lazy_static::lazy_static! {
     pub static ref MONGODB_AUTH_PASSWORD: String = std::env::var("MONGODB_AUTH_PASSWORD").unwrap();
 }
 
+pub type MongoPool = Pool<MongodbConnectionManager>;
+
+pub struct AppState {
+    pool: MongoPool,
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct IndexResponse {
     user_id: Option<String>,
@@ -81,7 +87,12 @@ fn increment(session: Session) -> Result<HttpResponse> {
 
 // fn signup() {}
 
-fn login(user_id: web::Json<Identity>, session: Session) -> Result<HttpResponse> {
+fn login(session: Session, app_state: web::Data<AppState>) -> Result<HttpResponse> {
+    let connection = app_state.pool.get().unwrap();
+    let client = connection.client.clone();
+
+    let collection: Collection = client.db("authService").collection("users");
+
     let id = user_id.into_inner().user_id;
     session.set("user_id", &id)?;
     session.renew();
@@ -113,7 +124,7 @@ fn create_connection_pool(
     auth_db: String,
     auth_username: String,
     auth_password: String,
-) -> Pool<MongodbConnectionManager> {
+) -> MongoPool {
     // Connection manager
     let manager: MongodbConnectionManager = MongodbConnectionManager::new(
         ConnectionOptions::builder()
@@ -123,10 +134,10 @@ fn create_connection_pool(
             .build(),
     );
     // Pool
-    let pool: Pool<MongodbConnectionManager> = Pool::builder().build(manager).unwrap();
+    let pool: MongoPool = Pool::builder().build(manager).unwrap();
 }
 
-fn init_db(pool: Pool<MongodbConnectionManager>) {
+fn init_db(pool: MongoPool) {
     let connection = pool.get().unwrap();
     let client = connection.client.clone();
     // Create indexes
@@ -164,12 +175,7 @@ fn init_db(pool: Pool<MongodbConnectionManager>) {
     }
 }
 
-fn init() -> (
-    SocketAddrV4,
-    String,
-    Vec<u8>,
-    Pool<MongodbConnectionManager>,
-) {
+fn init() -> (SocketAddrV4, String, Vec<u8>, MongoPool) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse::<SocketAddrV4>().unwrap();
     // Session
@@ -197,10 +203,10 @@ fn init() -> (
 
 fn main() -> io::Result<()> {
     let (address, redis_host, session_secret, pool) = init();
-    //.wrap(RedisSession::new(redis_host.clone(), &session_secret))
 
     HttpServer::new(move || {
         App::new()
+            .data(AppState { pool })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(Compress::default())
             .wrap(middleware::Logger::default())
