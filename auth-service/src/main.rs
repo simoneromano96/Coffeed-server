@@ -17,11 +17,10 @@ use actix_web::{
     web::{get, post, resource, scope},
     App, HttpResponse, HttpServer, Result,
 };
-use r2d2::Pool;
-use r2d2_mongodb::mongodb::bson;
-use r2d2_mongodb::mongodb::coll::options::IndexOptions;
-use r2d2_mongodb::mongodb::coll::Collection;
-use r2d2_mongodb::{ConnectionOptions, MongodbConnectionManager};
+use mongodb::{
+    bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, oid::ObjectId,
+    Client, ThreadedClient,
+};
 use serde::{Deserialize, Serialize};
 use std::{io, net::SocketAddrV4};
 
@@ -45,10 +44,8 @@ lazy_static::lazy_static! {
     pub static ref MONGODB_AUTH_PASSWORD: String = std::env::var("MONGODB_AUTH_PASSWORD").unwrap();
 }
 
-pub type MongoPool = Pool<MongodbConnectionManager>;
-
 pub struct AppState {
-    pool: MongoPool,
+    client: Client,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -60,6 +57,15 @@ pub struct IndexResponse {
 #[derive(Deserialize)]
 struct Identity {
     user_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct User {
+    id: ObjectId,
+    username: String,
+    email: String,
+    password: String,
+    user_type: String,
 }
 
 /*
@@ -88,12 +94,25 @@ fn increment(session: Session) -> Result<HttpResponse> {
 // fn signup() {}
 
 fn login(session: Session, app_state: web::Data<AppState>) -> Result<HttpResponse> {
-    let connection = app_state.pool.get().unwrap();
-    let client = connection.client.clone();
+    let client = app_state.client.clone();
 
+    // Get the db and collection
     let collection: Collection = client.db("authService").collection("users");
 
-    let id = user_id.into_inner().user_id;
+    // Fake up data from client
+    let email = "admin@mail.com";
+    let password = "password";
+
+    // Find user
+    let result_document = collection
+        .find_one(Some(doc! { "email":  email, "password": password }), None)
+        .unwrap()
+        .unwrap();
+
+    // Deserialize the document into a User instance
+    let result: User = bson::from_bson(bson::Bson::Document(result_document)).unwrap();
+
+    let id = result.id.to_hex();
     session.set("user_id", &id)?;
     session.renew();
 
@@ -118,38 +137,35 @@ fn logout(session: Session) -> Result<HttpResponse> {
     }
 }
 
-fn create_connection_pool(
+fn create_db_client(
     host: String,
     port: u16,
     auth_db: String,
     auth_username: String,
     auth_password: String,
-) -> MongoPool {
-    // Connection manager
-    let manager: MongodbConnectionManager = MongodbConnectionManager::new(
-        ConnectionOptions::builder()
-            .with_host(&host, port)
-            .with_db(&auth_db)
-            .with_auth(&auth_username, &auth_password)
-            .build(),
-    );
-    // Pool
-    let pool: MongoPool = Pool::builder().build(manager).unwrap();
+) -> Client {
+    let client = Client::connect(&host, port).unwrap();
+    // Authenticate
+    client
+        .db(&auth_db)
+        .auth(&auth_username, &auth_password)
+        .unwrap();
+
+    client
 }
 
-fn init_db(pool: MongoPool) {
-    let connection = pool.get().unwrap();
-    let client = connection.client.clone();
+fn init_db(client: Client) {
+    let client = client.clone();
     // Create indexes
     // UserTypes
-    let mut collection: Collection = db_client.db("authService").collection("users");
+    let mut collection: Collection = client.db("authService").collection("users");
     let mut name_index: IndexOptions = IndexOptions::new();
     name_index.unique = Some(true);
     collection
         .create_index(doc! {"name": 1}, Some(name_index))
         .unwrap();
     // Users
-    collection = db_client.db("authService").collection("users");
+    collection = client.db("authService").collection("users");
     let mut email_index: IndexOptions = IndexOptions::new();
     email_index.unique = Some(true);
     let mut username_index: IndexOptions = IndexOptions::new();
@@ -175,20 +191,20 @@ fn init_db(pool: MongoPool) {
     }
 }
 
-fn init() -> (SocketAddrV4, String, Vec<u8>, MongoPool) {
+fn init() -> (SocketAddrV4, String, Vec<u8>, Client) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse::<SocketAddrV4>().unwrap();
     // Session
     let redis_host: String = format!(
         "{}:{}",
-        REDIS_HOST.parse().unwrap(),
-        REDIS_PORT.parse().unwrap()
+        REDIS_HOST.parse::<String>().unwrap(),
+        REDIS_PORT.parse::<String>().unwrap()
     );
     let session_secret: Vec<u8> = SESSION_SECRET.parse::<String>().unwrap().into_bytes();
     // Logger utility
     env_logger::init();
     // Connection pool
-    let pool = create_connection_pool(
+    let client = create_db_client(
         MONGODB_HOST.parse().unwrap(),
         MONGODB_PORT.parse().unwrap(),
         MONGODB_AUTH_DB.parse().unwrap(),
@@ -196,17 +212,19 @@ fn init() -> (SocketAddrV4, String, Vec<u8>, MongoPool) {
         MONGODB_AUTH_PASSWORD.parse().unwrap(),
     );
     // Initialise DB
-    init_db(pool.clone());
+    init_db(client.clone());
 
-    (address, redis_host, session_secret, pool)
+    (address, redis_host, session_secret, client)
 }
 
 fn main() -> io::Result<()> {
-    let (address, redis_host, session_secret, pool) = init();
+    let (address, redis_host, session_secret, client) = init();
 
     HttpServer::new(move || {
         App::new()
-            .data(AppState { pool })
+            .data(AppState {
+                client: client.clone(),
+            })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(Compress::default())
             .wrap(middleware::Logger::default())
