@@ -54,11 +54,6 @@ pub struct IndexResponse {
     counter: i32,
 }
 
-#[derive(Deserialize)]
-struct Identity {
-    user_id: String,
-}
-
 #[derive(Serialize, Deserialize)]
 struct User {
     #[serde(rename = "_id")]
@@ -68,6 +63,12 @@ struct User {
     password: String,
     #[serde(rename = "userType")]
     user_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LoginInfo {
+    email: String,
+    password: String,
 }
 
 /*
@@ -95,15 +96,18 @@ fn increment(session: Session) -> Result<HttpResponse> {
 
 // fn signup() {}
 
-fn login(session: Session, app_state: web::Data<AppState>) -> Result<HttpResponse> {
+fn login(
+    session: Session,
+    app_state: web::Data<AppState>,
+    login_info: web::Json<LoginInfo>,
+) -> Result<HttpResponse> {
     let client = app_state.client.clone();
 
     // Get the db and collection
     let collection: Collection = client.db("authService").collection("users");
 
-    // Fake up data from client
-    let email = "admin@mail.com";
-    let password = "password";
+    let email = &login_info.email;
+    let password = &login_info.password;
 
     // Find user
     let result_document = collection
