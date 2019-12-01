@@ -61,10 +61,12 @@ struct Identity {
 
 #[derive(Serialize, Deserialize)]
 struct User {
+    #[serde(rename = "_id")]
     id: ObjectId,
     username: String,
     email: String,
     password: String,
+    #[serde(rename = "userType")]
     user_type: String,
 }
 
