@@ -1,0 +1,17 @@
+[package]
+name = "upload-service"
+version = "0.1.0"
+authors = ["Simone Romano <simoneromano@protonmail.ch>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "^1.0.8"
+actix-multipart = "^0.1.4"
+env_logger = "^0.7.1"
+futures = "^0.1.29"
+lazy_static="^1.4.0"
+nanoid="^0.2.0"
+actix-files="^0.1.6"
+url="^2.1.0"

@@ -1,13 +1,8 @@
-use crate::routes::upload;
-use crate::utils::{create_token, hash, verify};
+//use crate::utils::{create_token, hash, verify};
 use actix_web::{web, Error, HttpResponse};
 use chrono::{NaiveDateTime, Utc};
 use futures::Future;
-use juniper::{
-    graphiql::graphiql_source,
-    http::{playground::playground_source, GraphQLRequest},
-    Executor, FieldResult,
-};
+use juniper::{http::GraphQLRequest, Executor, FieldResult};
 use juniper_from_schema::graphql_schema_from_file;
 use mongodb::{
     bson, coll::Collection, db::ThreadedDatabase, doc, oid::ObjectId, Client, ThreadedClient,
@@ -15,6 +10,7 @@ use mongodb::{
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
+
 graphql_schema_from_file!("src/schema.graphql");
 
 pub struct Context {
@@ -69,17 +65,6 @@ impl CoffeesFields for Coffees {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Jwt {
-    pub jwt: String,
-}
-
-impl JwtFields for Jwt {
-    fn field_jwt(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.jwt)
-    }
-}
-
 //#[derive(Serialize, Deserialize)]
 pub struct BaseResponse {
     pub error: bool,
@@ -111,35 +96,6 @@ impl BaseResponseFields for BaseResponse {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct User {
-    #[serde(rename = "_id")]
-    pub id: ObjectId,
-    pub username: String,
-    pub email: String,
-    pub password: String,
-    #[serde(rename = "userType")]
-    pub user_type: String,
-}
-
-impl UserFields for User {
-    fn field_id(&self, _: &Executor<'_, Context>) -> FieldResult<juniper::ID> {
-        Ok(juniper::ID::new(self.id.to_hex()))
-    }
-    fn field_username(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.username)
-    }
-    fn field_email(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.email)
-    }
-    fn field_password(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.password)
-    }
-    fn field_user_type(&self, _: &Executor<'_, Context>) -> FieldResult<&String> {
-        Ok(&self.user_type)
-    }
-}
-
 impl Serialize for UpdateCoffeeInput {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -157,48 +113,6 @@ impl Serialize for UpdateCoffeeInput {
 
 // Query resolvers
 impl QueryFields for Query {
-    fn field_login(
-        &self,
-        executor: &juniper::Executor<'_, Context>,
-        _parent: &juniper_from_schema::QueryTrail<BaseResponse, juniper_from_schema::Walked>,
-        data: UserInput,
-    ) -> FieldResult<BaseResponse> {
-        // 1. Get context
-        let context = executor.context();
-        // 2. Get the db Connection
-        let connection: Client = context.db_client.clone();
-        // 3. Get the db
-        let database = connection.db("coffeed");
-        // 4. Get collection
-        let collection: Collection = database.collection("users");
-        // 5. Find user by username
-        let result_document = collection
-            .find_one(
-                Some(doc! { "username": data.username, "email": data.email }),
-                None,
-            )
-            .unwrap()
-            .unwrap();
-        // 6. Deserialize the document into a Coffee instance
-        let user: User = bson::from_bson(bson::Bson::Document(result_document))?;
-        // 7. Verify password
-        verify(user.password, data.password).unwrap();
-        // 8. Create token
-        let token: Jwt = Jwt {
-            jwt: create_token(user.username, user.email),
-        };
-        // 9. Create response
-        let response: BaseResponse = BaseResponse {
-            error: false,
-            status_code: 200,
-            timestamp: Utc::now().naive_utc(),
-            message: String::from("Updated successfully"),
-            data: Some(BaseResponseData::from(token)),
-        };
-
-        Ok(response)
-    }
-
     // TODO Handle error!
     fn field_coffees(
         &self,
@@ -404,20 +318,6 @@ impl MutationFields for Mutation {
     }
 }
 
-fn playground() -> HttpResponse {
-    let html = playground_source("http://127.0.0.1:8082/graphql");
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(html)
-}
-
-fn graphiql() -> HttpResponse {
-    let html = graphiql_source("http://127.0.0.1:8082/graphql");
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(html)
-}
-
 fn graphql(
     schema: web::Data<Arc<Schema>>,
     data: web::Json<GraphQLRequest>,
@@ -445,8 +345,5 @@ pub fn register(config: &mut web::ServiceConfig) {
 
     config
         .data(schema)
-        .route("/graphql", web::post().to_async(graphql))
-        .route("/playground", web::get().to(playground))
-        .route("/graphiql", web::get().to(graphiql))
-        .route("/upload", web::post().to_async(upload));
+        .route("/graphql", web::post().to_async(graphql));
 }

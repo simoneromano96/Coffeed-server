@@ -1,20 +1,15 @@
-// pub mod auth;
-pub mod routes;
 pub mod schema;
 pub mod utils;
-// pub mod models;
-// use crate::schema::User;
-// use crate::utils::PasswordHasher;
 use crate::schema::User;
 use crate::utils::utils::hash;
 use actix_cors::Cors;
-use actix_files;
-use actix_web::{http::header, middleware, App, HttpServer};
+use actix_web::{middleware, App, HttpServer};
 use mongodb::{
     bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, oid::ObjectId,
     Client, ThreadedClient,
 };
 use std::net::SocketAddr;
+
 // pub type MongoPool = r2d2::Pool<MongodbConnectionManager>;
 // pub type MongoConnection = r2d2::PooledConnection<MongodbConnectionManager>;
 
@@ -101,11 +96,9 @@ fn main() {
     let actix_address = std::env::var("ACTIX_ADDRESS").unwrap();
     let actix_port = std::env::var("ACTIX_PORT").unwrap().parse::<u16>().unwrap();
 
-    let address: SocketAddr = SocketAddr::from(
-        (format!("{}:{}", actix_address, actix_port))
-            .parse::<SocketAddr>()
-            .unwrap(),
-    );
+    let address: SocketAddr = (format!("{}:{}", actix_address, actix_port))
+        .parse::<SocketAddr>()
+        .unwrap();
 
     // Get DB info from env
     let mongodb_host = std::env::var("MONGODB_HOST").unwrap();
@@ -147,8 +140,6 @@ fn main() {
             // Save db_client in Server's state
             .data(db_client.clone())
             .configure(schema::register)
-            // Serve images
-            .service(actix_files::Files::new("/public", "src/public").show_files_listing())
     })
     .bind(address)
     .unwrap()

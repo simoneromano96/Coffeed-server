@@ -1,5 +1,5 @@
 [package]
-name = "coffeed-server"
+name = "coffees-service"
 version = "0.1.0"
 authors = ["Simone Romano <simoneromano@protonmail.ch>"]
 edition = "2018"
@@ -10,7 +10,7 @@ edition = "2018"
 # Webserver
 actix-web = "1.0.8"
 # File serving
-actix-files = "0.1.6"
+# actix-files = "0.1.6"
 # File upload multipart
 actix-multipart = "0.1.4"
 # Sessions

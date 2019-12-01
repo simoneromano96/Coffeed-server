@@ -1,0 +1,38 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+scalar DateTimeUtc @juniper(with_time_zone: false)
+
+union BaseResponseData = User | UserType
+
+type BaseResponse {
+  error: Boolean!
+  statusCode: Int!
+  timestamp: DateTimeUtc!
+  message: String!
+  data: BaseResponseData
+}
+
+type User {
+  id: ID! @juniper(ownership: "owned")
+  email: String!
+  username: String!
+  password: String!
+  userType: UserType!  @juniper(ownership: "owned")
+}
+
+type UserType {
+  id: ID!  @juniper(ownership: "owned")
+  name: String!
+  grants: [String!]!
+}
+
+type Query {
+  queryTest: BaseResponse! @juniper(ownership: "owned")
+}
+
+type Mutation {
+  mutationTest: BaseResponse! @juniper(ownership: "owned")
+}
