@@ -6,7 +6,7 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use env_logger;
 use reqwest::{self, Client, ClientBuilder};
 use serde_derive::{Deserialize, Serialize};
@@ -33,47 +33,21 @@ lazy_static::lazy_static! {
     pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct IndexResponse {
-    user_id: Option<String>,
-    counter: i32,
-}
-
-#[derive(Deserialize)]
-struct Identity {
-    user_id: String,
-}
-
-fn login(req: HttpRequest, session: Session, client: Data<Arc<reqwest::Client>>) -> HttpResponse {
-    let id = String::from("123");
-    session.set("user_id", &id).unwrap();
-    session.renew();
-
-    let counter: i32 = session
-        .get::<i32>("counter")
-        .unwrap_or(Some(0))
-        .unwrap_or(0);
-
-    HttpResponse::Ok().json(IndexResponse {
-        user_id: Some(id),
-        counter,
-    })
-}
-
-fn logout(session: Session, client: Data<Arc<reqwest::Client>>) -> HttpResponse {
-    let id: Option<String> = session.get("user_id").unwrap();
-    let message: String;
-    if let Some(x) = id {
-        session.purge();
-        message = format!("Logged out: {}", x);
-    } else {
-        message = String::from("Could not log out anonymous user");
-    }
-    HttpResponse::Ok().json(message)
-}
-
 pub struct AppState {
     http_client: Client,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SessionInfo {
+    user_id: String,
+    user_type: String,
+}
+
+fn index(session: Session) -> impl Responder {
+    let user_id = session.get::<String>("user_id").unwrap().unwrap();
+    let user_type = session.get::<String>("user_type").unwrap().unwrap();
+
+    HttpResponse::Ok().json(SessionInfo { user_id, user_type })
 }
 
 fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
@@ -132,14 +106,17 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
                     )
-                    .service(
-                        web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                            .route(web::get().to(login)),
-                    )
-                    .service(
-                        web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to(logout)),
-                    ),
+                    .service(web::resource("get_session").route(web::get().to(index))),
+                /*
+                .service(
+                    web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
+                        .route(web::get().to(login)),
+                )
+                .service(
+                    web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                        .route(web::post().to(logout)),
+                ),
+                */
             )
     })
     .bind(address)?

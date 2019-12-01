@@ -119,7 +119,9 @@ fn login(
     let result: User = bson::from_bson(bson::Bson::Document(result_document)).unwrap();
 
     let id = result.id.to_hex();
+    let user_type = result.user_type;
     session.set("user_id", &id)?;
+    session.set("user_type", &user_type)?;
     session.renew();
 
     let counter: i32 = session
