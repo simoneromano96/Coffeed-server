@@ -71,29 +71,6 @@ struct LoginInfo {
     password: String,
 }
 
-/*
-fn index(session: Session) -> Result<HttpResponse> {
-    let user_id: Option<String> = session.get::<String>("user_id").unwrap();
-    let counter: i32 = session
-        .get::<i32>("counter")
-        .unwrap_or(Some(0))
-        .unwrap_or(0);
-
-    Ok(HttpResponse::Ok().json(IndexResponse { user_id, counter }))
-}
-
-fn increment(session: Session) -> Result<HttpResponse> {
-    let user_id: Option<String> = session.get::<String>("user_id").unwrap();
-    let counter: i32 = session
-        .get::<i32>("counter")
-        .unwrap_or(Some(0))
-        .map_or(1, |inner| inner + 1);
-    session.set("counter", counter)?;
-
-    Ok(HttpResponse::Ok().json(IndexResponse { user_id, counter }))
-}
-*/
-
 // fn signup() {}
 
 fn login(

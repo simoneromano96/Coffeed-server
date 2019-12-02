@@ -6,9 +6,9 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use env_logger;
-use reqwest::{self, Client, ClientBuilder};
+use reqwest::{self, Client, ClientBuilder, Url};
 use serde_derive::{Deserialize, Serialize};
 use std::{env, io, net::SocketAddrV4};
 
@@ -37,10 +37,66 @@ pub struct AppState {
     http_client: Client,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct IndexResponse {
+    user_id: Option<String>,
+    counter: i32,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SessionInfo {
     user_id: String,
     user_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LoginInfo {
+    email: String,
+    password: String,
+}
+
+fn login(app_state: web::Data<AppState>, login_info: web::Json<LoginInfo>) -> impl Responder {
+    // Get client
+    let client = app_state.http_client.clone();
+    // Create url string
+    let destination_address_string: String = format!(
+        "{}{}{}",
+        &AUTH_SERVICE_URL.parse::<String>().unwrap(),
+        &API_ROUTE.parse::<String>().unwrap(),
+        &LOGIN_ROUTE.parse::<String>().unwrap(),
+    );
+    // Then Parse it into URL
+    let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
+
+    let mut response = client
+        .post(destination_address)
+        .json(&(login_info.into_inner()))
+        .send()
+        .unwrap();
+
+    let index_response = response.json::<IndexResponse>().unwrap();
+
+    HttpResponse::Ok().json(index_response)
+}
+
+fn logout(app_state: web::Data<AppState>) -> impl Responder {
+    // Get client
+    let client = app_state.http_client.clone();
+    // Create url string
+    let destination_address_string: String = format!(
+        "{}{}{}",
+        &AUTH_SERVICE_URL.parse::<String>().unwrap(),
+        &API_ROUTE.parse::<String>().unwrap(),
+        &LOGOUT_ROUTE.parse::<String>().unwrap(),
+    );
+    // Then Parse it into URL
+    let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
+
+    let mut response = client.post(destination_address).send().unwrap();
+
+    let logout_response = response.json::<String>().unwrap();
+
+    HttpResponse::Ok().json(logout_response)
 }
 
 fn index(session: Session) -> impl Responder {
@@ -106,17 +162,15 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
                     )
-                    .service(web::resource("get_session").route(web::get().to(index))),
-                /*
-                .service(
-                    web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                        .route(web::get().to(login)),
-                )
-                .service(
-                    web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                        .route(web::post().to(logout)),
-                ),
-                */
+                    .service(web::resource("get_session").route(web::get().to(index)))
+                    .service(
+                        web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
+                            .route(web::post().to(login)),
+                    )
+                    .service(
+                        web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                            .route(web::post().to(logout)),
+                    ),
             )
     })
     .bind(address)?
