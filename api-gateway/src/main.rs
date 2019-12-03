@@ -6,8 +6,11 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
-use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    error, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
+};
 use env_logger;
+use futures::Future;
 use reqwest::{self, Client, ClientBuilder, Url};
 use serde_derive::{Deserialize, Serialize};
 use std::{env, io, net::SocketAddrV4};
@@ -55,7 +58,10 @@ struct LoginInfo {
     password: String,
 }
 
-fn login(app_state: web::Data<AppState>, login_info: web::Json<LoginInfo>) -> impl Responder {
+fn login(
+    app_state: web::Data<AppState>,
+    login_info: web::Json<LoginInfo>,
+) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
@@ -68,18 +74,28 @@ fn login(app_state: web::Data<AppState>, login_info: web::Json<LoginInfo>) -> im
     // Then Parse it into URL
     let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
-    let mut response = client
-        .post(destination_address)
-        .json(&(login_info.into_inner()))
-        .send()
-        .unwrap();
-
-    let index_response = response.json::<IndexResponse>().unwrap();
-
-    HttpResponse::Ok().json(index_response)
+    web::block(move || {
+        let result: Result<reqwest::Response, reqwest::Error> = client
+            .post(destination_address)
+            .json(&(login_info.into_inner()))
+            .send();
+        match result {
+            Ok(mut response) => Ok(response.json::<IndexResponse>().unwrap()),
+            Err(e) => Err(e.to_string()),
+        }
+    })
+    .map(|data| HttpResponse::Ok().json(data))
+    .map_err(error::ErrorInternalServerError)
+    //let mut response = client
+    //    .post(destination_address)
+    //    .json(&(login_info.into_inner()))
+    //    .send()
+    //    .unwrap();
+    //let index_response = response.json::<IndexResponse>().unwrap();
+    //HttpResponse::Ok().json(index_response)
 }
 
-fn logout(app_state: web::Data<AppState>) -> impl Responder {
+fn logout(app_state: web::Data<AppState>) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
@@ -92,11 +108,20 @@ fn logout(app_state: web::Data<AppState>) -> impl Responder {
     // Then Parse it into URL
     let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
-    let mut response = client.post(destination_address).send().unwrap();
+    web::block(move || {
+        let result: Result<reqwest::Response, reqwest::Error> =
+            client.post(destination_address).send();
 
-    let logout_response = response.json::<String>().unwrap();
-
-    HttpResponse::Ok().json(logout_response)
+        match result {
+            Ok(mut response) => Ok(response.text().unwrap()),
+            Err(e) => Err(e.to_string()),
+        }
+    })
+    .map(|data| HttpResponse::Ok().json(data))
+    .map_err(error::ErrorInternalServerError)
+    // let mut response = client.post(destination_address).send().unwrap();
+    // let logout_response = response.json::<String>().unwrap();
+    // HttpResponse::Ok().json(logout_response)
 }
 
 fn index(session: Session) -> impl Responder {
@@ -165,11 +190,11 @@ fn main() -> io::Result<()> {
                     .service(web::resource("get_session").route(web::get().to(index)))
                     .service(
                         web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to(login)),
+                            .route(web::post().to_async(login)),
                     )
                     .service(
                         web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to(logout)),
+                            .route(web::post().to_async(logout)),
                     ),
             )
     })
