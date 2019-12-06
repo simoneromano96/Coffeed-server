@@ -1,25 +1,20 @@
 // Modules
-// pub mod auth_service;
+pub mod auth_service;
 pub mod models;
 pub mod upload_service;
 
 // Crates
 use actix_redis::RedisSession;
-use actix_session::Session;
-use actix_web::cookie::CookieJar;
-use actix_web::{
-    error, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
-};
+use actix_web::{middleware, web, App, HttpServer};
 use env_logger;
-use futures::{Future, Stream};
-use reqwest::header::{HeaderMap, HeaderValue, FORWARDED};
-use reqwest::{self, Client, ClientBuilder, Url};
-use serde_derive::{Deserialize, Serialize};
+use reqwest::{self, Client, ClientBuilder};
 use std::{env, io, net::SocketAddrV4};
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
+    // Actix conf
     pub static ref LISTEN_AT: String = env::var("LISTEN_AT").unwrap();
+    // Commons
     pub static ref API_ROUTE: String = env::var("API_ROUTE").unwrap();
     // Gateway
     pub static ref API_GATEWAY_PUBLIC_URL: String = env::var("API_GATEWAY_PUBLIC_URL").unwrap();
@@ -42,163 +37,10 @@ pub struct AppState {
     http_client: Client,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct IndexResponse {
-    user_id: Option<String>,
-    counter: i32,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SessionInfo {
-    user_id: String,
-    user_type: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct LoginInfo {
-    email: String,
-    password: String,
-}
-
-fn login(
-    app_state: web::Data<AppState>,
-    login_info: web::Json<LoginInfo>,
-    req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
-    // Get client
-    let client = app_state.http_client.clone();
-    // Create url string
-    let destination_address_string: String = format!(
-        "{}{}{}",
-        &AUTH_SERVICE_URL.parse::<String>().unwrap(),
-        &API_ROUTE.parse::<String>().unwrap(),
-        &LOGIN_ROUTE.parse::<String>().unwrap(),
-    );
-    // Then Parse it into URL
-    let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
-
-    // Get request ip
-    let from_address = req.head().peer_addr.unwrap();
-
-    // Create headers
-    let mut header_map: HeaderMap = HeaderMap::new();
-    // Set forwarded header
-    header_map.append(
-        FORWARDED,
-        HeaderValue::from_str(&from_address.to_string()).unwrap(),
-    );
-
-    web::block(move || {
-        let result: Result<reqwest::Response, reqwest::Error> = client
-            .post(destination_address)
-            .headers(header_map)
-            .json(&(login_info.into_inner()))
-            .send();
-        match result {
-            Ok(mut response) => {
-                let mut cookie_jar = CookieJar::new();
-                let cookies = response.cookies();
-                cookies.for_each(|cookie| {
-                    let actix_cookie = actix_web::cookie::Cookie::new(
-                        cookie.name().to_owned(),
-                        cookie.value().to_owned(),
-                    );
-                    cookie_jar.add(actix_cookie);
-                });
-                Ok((response.json::<IndexResponse>().unwrap(), cookie_jar))
-            }
-            Err(e) => Err(e.to_string()),
-        }
-    })
-    .map(|(data, cookies)| {
-        let mut response_builder = HttpResponse::Ok();
-        cookies.iter().for_each(|cookie| {
-            response_builder.cookie(cookie.to_owned());
-        });
-        response_builder.json(data)
-    })
-    .map_err(error::ErrorInternalServerError)
-    //let mut response = client
-    //    .post(destination_address)
-    //    .json(&(login_info.into_inner()))
-    //    .send()
-    //    .unwrap();
-    //let index_response = response.json::<IndexResponse>().unwrap();
-    //HttpResponse::Ok().json(index_response)
-}
-
-fn logout(
-    app_state: web::Data<AppState>,
-    req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
-    // Get client
-    let client = app_state.http_client.clone();
-    // Create url string
-    let destination_address_string: String = format!(
-        "{}{}{}",
-        &AUTH_SERVICE_URL.parse::<String>().unwrap(),
-        &API_ROUTE.parse::<String>().unwrap(),
-        &LOGOUT_ROUTE.parse::<String>().unwrap(),
-    );
-    // Then Parse it into URL
-    let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
-
-    // Get request ip
-    let from_address = req.head().peer_addr.unwrap();
-
-    // Create headers
-    let mut header_map: HeaderMap = HeaderMap::new();
-    // Set forwarded header
-    header_map.append(
-        FORWARDED,
-        HeaderValue::from_str(&from_address.to_string()).unwrap(),
-    );
-
-    web::block(move || {
-        let result: Result<reqwest::Response, reqwest::Error> =
-            client.post(destination_address).headers(header_map).send();
-
-        match result {
-            Ok(mut response) => {
-                let mut cookie_jar = CookieJar::new();
-                let cookies = response.cookies();
-                cookies.for_each(|cookie| {
-                    let actix_cookie = actix_web::cookie::Cookie::new(
-                        cookie.name().to_owned(),
-                        cookie.value().to_owned(),
-                    );
-                    cookie_jar.add(actix_cookie);
-                });
-
-                Ok((response.text().unwrap(), cookie_jar))
-            }
-            Err(e) => Err(e.to_string()),
-        }
-    })
-    .map(|(data, cookies)| {
-        let mut response_builder = HttpResponse::Ok();
-        cookies.iter().for_each(|cookie| {
-            response_builder.cookie(cookie.to_owned());
-        });
-        response_builder.json(data)
-    })
-    .map_err(error::ErrorInternalServerError)
-    // let mut response = client.post(destination_address).send().unwrap();
-    // let logout_response = response.json::<String>().unwrap();
-    // HttpResponse::Ok().json(logout_response)
-}
-
-fn index(session: Session) -> impl Responder {
-    let user_id = session.get::<String>("user_id").unwrap().unwrap();
-    let user_type = session.get::<String>("user_type").unwrap().unwrap();
-
-    HttpResponse::Ok().json(SessionInfo { user_id, user_type })
-}
-
 fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
-    // Add a global listening to /public*
+    // Add a global listener to /public*
     let public_route: String = format!("{}*", PUBLIC_ROUTE.parse::<String>().unwrap());
     // Session
     let redis_host: String = format!(
@@ -251,14 +93,14 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
                     )
-                    .service(web::resource("get_session").route(web::get().to(index)))
+                    .service(web::resource("get_session").route(web::get().to(auth_service::index)))
                     .service(
                         web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to_async(login)),
+                            .route(web::post().to_async(auth_service::login)),
                     )
                     .service(
                         web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to_async(logout)),
+                            .route(web::post().to_async(auth_service::logout)),
                     ),
             )
     })
