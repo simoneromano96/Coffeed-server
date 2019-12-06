@@ -2,7 +2,7 @@
 use crate::AppState;
 use actix_session::Session;
 use actix_web::{
-    cookie::CookieJar, error, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
+    cookie::CookieJar, error, web, Error, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use futures::Future;
 use reqwest::{
@@ -11,7 +11,7 @@ use reqwest::{
     Url,
 };
 use serde_derive::{Deserialize, Serialize};
-use std::{env, net::SocketAddrV4};
+use std::env;
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
