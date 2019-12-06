@@ -61,6 +61,7 @@ struct LoginInfo {
 fn login(
     app_state: web::Data<AppState>,
     login_info: web::Json<LoginInfo>,
+    req: HttpRequest,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
     let client = app_state.http_client.clone();
@@ -73,6 +74,9 @@ fn login(
     );
     // Then Parse it into URL
     let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
+
+    // Get request ip
+    let from_address = req.head().peer_addr.unwrap();
 
     web::block(move || {
         let result: Result<reqwest::Response, reqwest::Error> = client
@@ -95,7 +99,7 @@ fn login(
     //HttpResponse::Ok().json(index_response)
 }
 
-fn logout(app_state: web::Data<AppState>) -> impl Future<Item = HttpResponse, Error = Error> {
+fn logout(app_state: web::Data<AppState>, req: HttpRequest,) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
