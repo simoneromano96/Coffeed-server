@@ -11,6 +11,7 @@ use actix_web::{
 };
 use env_logger;
 use futures::Future;
+use reqwest::header::{HeaderMap, HeaderValue, FORWARDED};
 use reqwest::{self, Client, ClientBuilder, Url};
 use serde_derive::{Deserialize, Serialize};
 use std::{env, io, net::SocketAddrV4};
@@ -78,9 +79,18 @@ fn login(
     // Get request ip
     let from_address = req.head().peer_addr.unwrap();
 
+    // Create headers
+    let mut header_map: HeaderMap = HeaderMap::new();
+    // Set forwarded header
+    header_map.append(
+        FORWARDED,
+        HeaderValue::from_str(&from_address.to_string()).unwrap(),
+    );
+
     web::block(move || {
         let result: Result<reqwest::Response, reqwest::Error> = client
             .post(destination_address)
+            .headers(header_map)
             .json(&(login_info.into_inner()))
             .send();
         match result {
@@ -99,7 +109,10 @@ fn login(
     //HttpResponse::Ok().json(index_response)
 }
 
-fn logout(app_state: web::Data<AppState>, req: HttpRequest,) -> impl Future<Item = HttpResponse, Error = Error> {
+fn logout(
+    app_state: web::Data<AppState>,
+    req: HttpRequest,
+) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
@@ -112,9 +125,20 @@ fn logout(app_state: web::Data<AppState>, req: HttpRequest,) -> impl Future<Item
     // Then Parse it into URL
     let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
+    // Get request ip
+    let from_address = req.head().peer_addr.unwrap();
+
+    // Create headers
+    let mut header_map: HeaderMap = HeaderMap::new();
+    // Set forwarded header
+    header_map.append(
+        FORWARDED,
+        HeaderValue::from_str(&from_address.to_string()).unwrap(),
+    );
+
     web::block(move || {
         let result: Result<reqwest::Response, reqwest::Error> =
-            client.post(destination_address).send();
+            client.post(destination_address).headers(header_map).send();
 
         match result {
             Ok(mut response) => Ok(response.text().unwrap()),
