@@ -6,11 +6,12 @@ pub mod upload_service;
 // Crates
 use actix_redis::RedisSession;
 use actix_session::Session;
+use actix_web::cookie::CookieJar;
 use actix_web::{
     error, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use env_logger;
-use futures::Future;
+use futures::{Future, Stream};
 use reqwest::header::{HeaderMap, HeaderValue, FORWARDED};
 use reqwest::{self, Client, ClientBuilder, Url};
 use serde_derive::{Deserialize, Serialize};
@@ -94,11 +95,28 @@ fn login(
             .json(&(login_info.into_inner()))
             .send();
         match result {
-            Ok(mut response) => Ok(response.json::<IndexResponse>().unwrap()),
+            Ok(mut response) => {
+                let mut cookie_jar = CookieJar::new();
+                let cookies = response.cookies();
+                cookies.for_each(|cookie| {
+                    let actix_cookie = actix_web::cookie::Cookie::new(
+                        cookie.name().to_owned(),
+                        cookie.value().to_owned(),
+                    );
+                    cookie_jar.add(actix_cookie);
+                });
+                Ok((response.json::<IndexResponse>().unwrap(), cookie_jar))
+            }
             Err(e) => Err(e.to_string()),
         }
     })
-    .map(|data| HttpResponse::Ok().json(data))
+    .map(|(data, cookies)| {
+        let mut response_builder = HttpResponse::Ok();
+        cookies.iter().for_each(|cookie| {
+            response_builder.cookie(cookie.to_owned());
+        });
+        response_builder.json(data)
+    })
     .map_err(error::ErrorInternalServerError)
     //let mut response = client
     //    .post(destination_address)
@@ -141,11 +159,29 @@ fn logout(
             client.post(destination_address).headers(header_map).send();
 
         match result {
-            Ok(mut response) => Ok(response.text().unwrap()),
+            Ok(mut response) => {
+                let mut cookie_jar = CookieJar::new();
+                let cookies = response.cookies();
+                cookies.for_each(|cookie| {
+                    let actix_cookie = actix_web::cookie::Cookie::new(
+                        cookie.name().to_owned(),
+                        cookie.value().to_owned(),
+                    );
+                    cookie_jar.add(actix_cookie);
+                });
+
+                Ok((response.text().unwrap(), cookie_jar))
+            }
             Err(e) => Err(e.to_string()),
         }
     })
-    .map(|data| HttpResponse::Ok().json(data))
+    .map(|(data, cookies)| {
+        let mut response_builder = HttpResponse::Ok();
+        cookies.iter().for_each(|cookie| {
+            response_builder.cookie(cookie.to_owned());
+        });
+        response_builder.json(data)
+    })
     .map_err(error::ErrorInternalServerError)
     // let mut response = client.post(destination_address).send().unwrap();
     // let logout_response = response.json::<String>().unwrap();
