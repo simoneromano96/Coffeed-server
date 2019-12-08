@@ -33,37 +33,12 @@ fn create_db_client(
 fn init_db(db_client: Client) {
     // Create indexes
     // Coffees
-    let mut collection: Collection = db_client.db("coffeed").collection("coffees");
+    let mut collection: Collection = db_client.db("coffeesService").collection("coffees");
     let mut name_index: IndexOptions = IndexOptions::new();
     name_index.unique = Some(true);
     collection
         .create_index(doc! {"name": 1}, Some(name_index))
         .expect("Could not create index");
-    // Users
-    collection = db_client.db("coffeed").collection("users");
-    let mut email_index: IndexOptions = IndexOptions::new();
-    email_index.unique = Some(true);
-    let mut username_index: IndexOptions = IndexOptions::new();
-    username_index.unique = Some(true);
-    collection
-        .create_index(doc! {"email": 1}, Some(email_index))
-        .unwrap();
-    collection
-        .create_index(doc! {"username": 1}, Some(username_index))
-        .unwrap();
-    if collection.count(None, None).unwrap() == 0 {
-        let admin = User {
-            id: ObjectId::new().unwrap(),
-            username: String::from("admin"),
-            email: String::from("admin@mail.com"),
-            password: hash(String::from("password")).unwrap(),
-            user_type: String::from("Admin"),
-        };
-        let bson = bson::to_bson(&admin).unwrap();
-        if let bson::Bson::Document(document) = bson {
-            collection.insert_one(document, None).unwrap();
-        }
-    }
 }
 
 fn main() {
@@ -73,8 +48,6 @@ fn main() {
     // This server public address
     std::env::set_var("ACTIX_ADDRESS", "127.0.0.1");
     std::env::set_var("ACTIX_PORT", "8082");
-    // Argon Hash Key
-    std::env::set_var("HASH_SECRET_KEY", "secret_key");
     // MongoDB
     std::env::set_var("MONGODB_HOST", "167.86.100.118");
     std::env::set_var("MONGODB_PORT", "27017");

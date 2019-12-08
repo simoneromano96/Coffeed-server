@@ -50,7 +50,6 @@ pub struct AppState {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct IndexResponse {
     user_id: Option<String>,
-    counter: i32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,15 +99,7 @@ fn login(
     session.set("user_type", &user_type)?;
     session.renew();
 
-    let counter: i32 = session
-        .get::<i32>("counter")
-        .unwrap_or(Some(0))
-        .unwrap_or(0);
-
-    Ok(HttpResponse::Ok().json(IndexResponse {
-        user_id: Some(id),
-        counter,
-    }))
+    Ok(HttpResponse::Ok().json(IndexResponse { user_id: Some(id) }))
 }
 
 fn logout(session: Session) -> Result<HttpResponse> {
@@ -141,7 +132,7 @@ fn create_db_client(
 fn init_db(client: Client) {
     // Create indexes
     // UserTypes
-    let mut collection: Collection = client.db("authService").collection("users");
+    let mut collection: Collection = client.db("authService").collection("userTypes");
     let mut name_index: IndexOptions = IndexOptions::new();
     name_index.unique = Some(true);
     collection
