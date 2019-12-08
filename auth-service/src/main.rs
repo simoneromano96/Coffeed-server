@@ -16,15 +16,18 @@ use actix_web::{
     web::{get, post, resource, scope},
     App, HttpResponse, HttpServer, Result,
 };
+use argonautica::{Hasher, Verifier};
 use mongodb::{
     bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, oid::ObjectId,
     Client, ThreadedClient,
 };
+use nanoid;
 use serde::{Deserialize, Serialize};
 use std::{io, net::SocketAddrV4};
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
+    // Actix conf
     pub static ref LISTEN_AT: String = std::env::var("LISTEN_AT").unwrap();
     pub static ref AUTH_SERVICE_PUBLIC_URL: String = std::env::var("AUTH_SERVICE_PUBLIC_URL").unwrap();
     // Routes
@@ -41,6 +44,9 @@ lazy_static::lazy_static! {
     pub static ref MONGODB_AUTH_DB: String = std::env::var("MONGODB_AUTH_DB").unwrap();
     pub static ref MONGODB_AUTH_USERNAME: String = std::env::var("MONGODB_AUTH_USERNAME").unwrap();
     pub static ref MONGODB_AUTH_PASSWORD: String = std::env::var("MONGODB_AUTH_PASSWORD").unwrap();
+    // NanoID
+    pub static ref NANOID_LENGTH: String = std::env::var("NANOID_LENGTH").unwrap();
+    pub static ref ARGON2_HASH_SECRET_KEY: String = std::env::var("ARGON2_HASH_SECRET_KEY").unwrap();
 }
 
 pub struct AppState {
@@ -55,18 +61,48 @@ pub struct IndexResponse {
 #[derive(Serialize, Deserialize)]
 struct User {
     #[serde(rename = "_id")]
-    id: ObjectId,
+    id: String,
     username: String,
     email: String,
     password: String,
     #[serde(rename = "userType")]
     user_type: String,
 }
+#[derive(Serialize, Deserialize)]
+struct UserType {
+    #[serde(rename = "_id")]
+    id: String,
+    name: String,
+    grants: Vec<String>,
+}
 
 #[derive(Serialize, Deserialize)]
 struct LoginInfo {
     email: String,
     password: String,
+}
+
+fn hash_password(password: String) -> String {
+    let mut hasher = Hasher::default();
+    hasher
+        .with_password(password)
+        .with_secret_key(ARGON2_HASH_SECRET_KEY.parse::<String>().unwrap())
+        .hash()
+        .unwrap()
+}
+
+fn verify_password(password_hash: String, password: String) -> bool {
+    let mut verifier = Verifier::default();
+    verifier
+        .with_hash(password_hash)
+        .with_password(password)
+        .with_secret_key(ARGON2_HASH_SECRET_KEY.parse::<String>().unwrap())
+        .verify()
+        .unwrap()
+}
+
+fn new_id() -> String {
+    nanoid::generate(NANOID_LENGTH.parse::<usize>().unwrap())
 }
 
 // fn signup() {}
@@ -82,24 +118,26 @@ fn login(
     let collection: Collection = client.db("authService").collection("users");
 
     let email = &login_info.email;
-    let password = &login_info.password;
 
     // Find user
     let result_document = collection
-        .find_one(Some(doc! { "email":  email, "password": password }), None)
+        .find_one(Some(doc! { "email":  email }), None)
         .unwrap()
         .unwrap();
 
     // Deserialize the document into a User instance
     let result: User = bson::from_bson(bson::Bson::Document(result_document)).unwrap();
 
-    let id = result.id.to_hex();
-    let user_type = result.user_type;
-    session.set("user_id", &id)?;
-    session.set("user_type", &user_type)?;
-    session.renew();
+    if verify_password(result.password, login_info.password.clone()) {
+        let (id, user_type) = (result.id, result.user_type);
+        session.set("user_id", &id)?;
+        session.set("user_type", &user_type)?;
+        session.renew();
 
-    Ok(HttpResponse::Ok().json(IndexResponse { user_id: Some(id) }))
+        Ok(HttpResponse::Ok().json(IndexResponse { user_id: Some(id) }))
+    } else {
+        Ok(HttpResponse::BadRequest().json("User not found or wrong password"))
+    }
 }
 
 fn logout(session: Session) -> Result<HttpResponse> {
@@ -138,6 +176,21 @@ fn init_db(client: Client) {
     collection
         .create_index(doc! {"name": 1}, Some(name_index))
         .unwrap();
+    if collection.count(None, None).unwrap() == 0 {
+        let admin_type = UserType {
+            id: new_id(),
+            name: String::from("Admin"),
+            grants: vec![
+                String::from("create"),
+                String::from("update"),
+                String::from("delete"),
+            ],
+        };
+        let bson = bson::to_bson(&admin_type).unwrap();
+        if let bson::Bson::Document(document) = bson {
+            collection.insert_one(document, None).unwrap();
+        }
+    }
     // Users
     collection = client.db("authService").collection("users");
     let mut email_index: IndexOptions = IndexOptions::new();
@@ -151,12 +204,21 @@ fn init_db(client: Client) {
         .create_index(doc! {"username": 1}, Some(username_index))
         .unwrap();
     if collection.count(None, None).unwrap() == 0 {
+        let password = hash_password(String::from("password"));
+
+        let user_types = client.db("authService").collection("userTypes");
+        let user_type_doc = user_types
+            .find_one(Some(doc! {"name": "Admin" }), None)
+            .unwrap()
+            .unwrap();
+        let user_type: UserType = bson::from_bson(bson::Bson::Document(user_type_doc)).unwrap();
+
         let admin = User {
-            id: ObjectId::new().unwrap(),
+            id: new_id(),
             username: String::from("admin"),
             email: String::from("admin@mail.com"),
-            password: String::from("password"),
-            user_type: String::from("Admin"),
+            password,
+            user_type: user_type.id,
         };
         let bson = bson::to_bson(&admin).unwrap();
         if let bson::Bson::Document(document) = bson {
