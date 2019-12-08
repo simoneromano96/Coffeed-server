@@ -7,7 +7,6 @@
 // mod graphql;
 
 // Crates
-use actix_identity::IdentityService;
 use actix_redis::RedisSession;
 use actix_session::Session;
 use actix_web::{
@@ -140,7 +139,6 @@ fn create_db_client(
 }
 
 fn init_db(client: Client) {
-    let client = client.clone();
     // Create indexes
     // UserTypes
     let mut collection: Collection = client.db("authService").collection("users");

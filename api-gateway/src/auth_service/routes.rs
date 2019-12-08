@@ -1,9 +1,7 @@
 // Crates
 use crate::AppState;
 use actix_session::Session;
-use actix_web::{
-    cookie::CookieJar, error, web, Error, HttpRequest, HttpResponse, HttpServer, Responder,
-};
+use actix_web::{cookie::CookieJar, error, web, Error, HttpRequest, HttpResponse, Responder};
 use futures::Future;
 use reqwest::{
     self,
@@ -78,7 +76,7 @@ pub fn login(
             .send();
         match result {
             Ok(mut response) => {
-                let mut cookie_jar = CookieJar::new();
+                let mut cookie_jar: CookieJar = CookieJar::new();
                 let cookies = response.cookies();
                 cookies.for_each(|cookie| {
                     let actix_cookie = actix_web::cookie::Cookie::new(
@@ -100,13 +98,6 @@ pub fn login(
         response_builder.json(data)
     })
     .map_err(error::ErrorInternalServerError)
-    //let mut response = client
-    //    .post(destination_address)
-    //    .json(&(login_info.into_inner()))
-    //    .send()
-    //    .unwrap();
-    //let index_response = response.json::<IndexResponse>().unwrap();
-    //HttpResponse::Ok().json(index_response)
 }
 
 pub fn logout(
@@ -165,12 +156,9 @@ pub fn logout(
         response_builder.json(data)
     })
     .map_err(error::ErrorInternalServerError)
-    // let mut response = client.post(destination_address).send().unwrap();
-    // let logout_response = response.json::<String>().unwrap();
-    // HttpResponse::Ok().json(logout_response)
 }
 
-pub fn index(session: Session) -> impl Responder {
+pub fn get_session(session: Session) -> impl Responder {
     let user_id = session.get::<String>("user_id").unwrap().unwrap();
     let user_type = session.get::<String>("user_type").unwrap().unwrap();
 

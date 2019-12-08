@@ -23,7 +23,6 @@ lazy_static::lazy_static! {
     pub static ref UPLOAD_ROUTE: String = env::var("UPLOAD_ROUTE").unwrap();
     pub static ref PUBLIC_ROUTE: String = env::var("PUBLIC_ROUTE").unwrap();
     // Auth service
-    pub static ref AUTH_SERVICE_PUBLIC_URL: String = env::var("AUTH_SERVICE_PUBLIC_URL").unwrap();
     pub static ref AUTH_SERVICE_URL: String = env::var("AUTH_SERVICE_URL").unwrap();
     pub static ref LOGIN_ROUTE: String = env::var("LOGIN_ROUTE").unwrap();
     pub static ref LOGOUT_ROUTE: String = env::var("LOGOUT_ROUTE").unwrap();
@@ -93,7 +92,8 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
                     )
-                    .service(web::resource("get_session").route(web::get().to(auth_service::index)))
+                    // (only for testing purposes)
+                    // .service(web::resource("get_session").route(web::get().to(auth_service::get_session)))
                     .service(
                         web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to_async(auth_service::login)),
