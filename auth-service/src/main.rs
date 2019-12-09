@@ -34,6 +34,7 @@ lazy_static::lazy_static! {
     pub static ref API_ROUTE: String = std::env::var("API_ROUTE").unwrap();
     pub static ref LOGIN_ROUTE: String = std::env::var("LOGIN_ROUTE").unwrap();
     pub static ref LOGOUT_ROUTE: String = std::env::var("LOGOUT_ROUTE").unwrap();
+    pub static ref SIGNUP_ROUTE: String = std::env::var("SIGNUP_ROUTE").unwrap();
     // Session
     pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
     pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
@@ -82,6 +83,14 @@ struct LoginInfo {
     password: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct SignupInfo {
+    username: String,
+    email: String,
+    password: String,
+    password_confirmation: String,
+}
+
 fn hash_password(password: String) -> String {
     let mut hasher = Hasher::default();
     hasher
@@ -104,8 +113,6 @@ fn verify_password(password_hash: String, password: String) -> bool {
 fn new_id() -> String {
     nanoid::generate(NANOID_LENGTH.parse::<usize>().unwrap())
 }
-
-// fn signup() {}
 
 fn login(
     session: Session,
@@ -138,6 +145,46 @@ fn login(
     } else {
         Ok(HttpResponse::BadRequest().json("User not found or wrong password"))
     }
+}
+
+fn signup(
+    app_state: web::Data<AppState>,
+    signup_info: web::Json<SignupInfo>,
+) -> Result<HttpResponse> {
+    let client = app_state.client.clone();
+
+    let mut result: Result<HttpResponse> = Ok(HttpResponse::BadRequest().json("Unknown error"));
+
+    if signup_info.password != signup_info.password_confirmation {
+        result = Ok(HttpResponse::BadRequest().json("Passwords don't match"));
+    }
+
+    let collection: Collection = client.db("authService").collection("users");
+
+    let password: String = hash_password(signup_info.password.clone());
+
+    let id = new_id();
+    let user: User = User {
+        id,
+        username: signup_info.username.clone(),
+        email: signup_info.email.clone(),
+        password,
+        user_type: "".to_string(), // This will be resolved after creation
+    };
+
+    // Create user
+    let bson = bson::to_bson(&user).unwrap();
+    if let bson::Bson::Document(document) = bson {
+        let insert_result = collection.insert_one(document, None);
+        match insert_result {
+            Ok(new_id) => {
+                result = Ok(HttpResponse::Ok().json(id));
+            }
+            Err(err) => result = Ok(HttpResponse::BadRequest().json(err.to_string())),
+        }
+    }
+
+    result
 }
 
 fn logout(session: Session) -> Result<HttpResponse> {
