@@ -1,3 +1,3 @@
 pub mod routes;
 
-pub use routes::{index, login, logout};
+pub use routes::{get_session, login, logout};

@@ -66,7 +66,7 @@ fn init_client() -> Client {
     let client_builder: ClientBuilder = ClientBuilder::new()
         .use_rustls_tls()
         .gzip(true)
-        .cookie_store(true);
+        .cookie_store(false);
 
     client_builder.build().unwrap()
 }
@@ -93,7 +93,10 @@ fn main() -> io::Result<()> {
                             .route(web::get().to_async(upload_service::public_files)),
                     )
                     // (only for testing purposes)
-                    // .service(web::resource("get_session").route(web::get().to(auth_service::get_session)))
+                    .service(
+                        web::resource("get_session")
+                            .route(web::get().to(auth_service::get_session)),
+                    )
                     .service(
                         web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to_async(auth_service::login)),

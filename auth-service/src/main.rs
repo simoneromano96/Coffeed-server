@@ -13,13 +13,13 @@ use actix_web::{
     middleware,
     middleware::Compress,
     web,
-    web::{get, post, resource, scope},
+    web::{post, resource, scope},
     App, HttpResponse, HttpServer, Result,
 };
 use argonautica::{Hasher, Verifier};
 use mongodb::{
-    bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, oid::ObjectId,
-    Client, ThreadedClient,
+    bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, Client,
+    ThreadedClient,
 };
 use nanoid;
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,7 @@ lazy_static::lazy_static! {
     pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
     pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
     pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
+    pub static ref SESSION_COOKIE_NAME: String = std::env::var("SESSION_COOKIE_NAME").unwrap();
     // Mongodb
     pub static ref MONGODB_HOST: String = std::env::var("MONGODB_HOST").unwrap();
     pub static ref MONGODB_PORT: String = std::env::var("MONGODB_PORT").unwrap();
@@ -47,6 +48,7 @@ lazy_static::lazy_static! {
     pub static ref MONGODB_AUTH_PASSWORD: String = std::env::var("MONGODB_AUTH_PASSWORD").unwrap();
     // NanoID
     pub static ref NANOID_LENGTH: String = std::env::var("NANOID_LENGTH").unwrap();
+    // Argon hashing key
     pub static ref ARGON2_HASH_SECRET_KEY: String = std::env::var("ARGON2_HASH_SECRET_KEY").unwrap();
 }
 
@@ -165,7 +167,7 @@ fn signup(
 
     let id = new_id();
     let user: User = User {
-        id,
+        id: id.clone(),
         username: signup_info.username.clone(),
         email: signup_info.email.clone(),
         password,
@@ -177,7 +179,7 @@ fn signup(
     if let bson::Bson::Document(document) = bson {
         let insert_result = collection.insert_one(document, None);
         match insert_result {
-            Ok(new_id) => {
+            Ok(_result) => {
                 result = Ok(HttpResponse::Ok().json(id));
             }
             Err(err) => result = Ok(HttpResponse::BadRequest().json(err.to_string())),
@@ -308,13 +310,17 @@ fn main() -> io::Result<()> {
             .data(AppState {
                 client: client.clone(),
             })
-            .wrap(RedisSession::new(redis_host.clone(), &session_secret))
+            .wrap(
+                RedisSession::new(redis_host.clone(), &session_secret)
+                    .cookie_name(&SESSION_COOKIE_NAME),
+            )
             .wrap(Compress::default())
             .wrap(middleware::Logger::default())
             .service(
                 scope(&API_ROUTE)
                     .service(resource(&LOGIN_ROUTE).route(post().to(login)))
-                    .service(resource(&LOGOUT_ROUTE).route(post().to(logout))),
+                    .service(resource(&LOGOUT_ROUTE).route(post().to(logout)))
+                    .service(resource(&SIGNUP_ROUTE).route(post().to(signup))),
             )
     })
     .bind(address)?

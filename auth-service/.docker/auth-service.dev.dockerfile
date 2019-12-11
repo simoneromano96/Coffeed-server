@@ -4,6 +4,9 @@ WORKDIR /auth-service
 
 RUN cargo install cargo-watch
 
+# Dependency for argon
+RUN apt-get update && apt-get install clang llvm-dev libclang-dev -y
+
 # COPY . .
 # RUN cargo install --path .
 

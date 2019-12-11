@@ -25,7 +25,6 @@ lazy_static::lazy_static! {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct IndexResponse {
     user_id: Option<String>,
-    counter: i32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -121,6 +120,7 @@ pub fn logout(
 
     // Create headers
     let mut header_map: HeaderMap = HeaderMap::new();
+
     // Set forwarded header
     header_map.append(
         FORWARDED,
