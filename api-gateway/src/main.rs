@@ -8,7 +8,7 @@ use actix_redis::RedisSession;
 use actix_web::client as awc;
 use actix_web::{middleware, web, App, HttpServer};
 use env_logger;
-use reqwest::{self, Client, ClientBuilder};
+// use reqwest::{self, Client, ClientBuilder};
 use std::{env, io, net::SocketAddrV4};
 
 // Evaluate env vars only once
@@ -61,6 +61,7 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     )
 }
 
+/*
 fn init_client() -> Client {
     // Client for requests
     // TODO: Custom http client
@@ -71,6 +72,7 @@ fn init_client() -> Client {
 
     client_builder.build().unwrap()
 }
+*/
 
 fn init_actix_client() -> awc::Client {
     // Client for requests

@@ -59,58 +59,40 @@ pub fn login(
     // Then Parse it into URL
     // let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
-    // Get request ip
-    let from_address = req.head().peer_addr.unwrap();
-
-    // Create headers
-    // let mut header_map: HeaderMap = HeaderMap::new();
-    // Set forwarded header
-    // header_map.append(
-    //    FORWARDED,
-    //    HeaderValue::from_str(&from_address.to_string()).unwrap(),
-    //);
-
+    // Create a new request
     let forwarded_req = client
         .request_from(destination_address, req.head())
-        .header("forwarded", format!("{}", from_address.ip()))
         .no_decompress();
+    // Add headers
+    let forwarded_req = if let Some(addr) = req.head().peer_addr {
+        forwarded_req
+            .header("x-forwarded-for", format!("{}", addr.ip()))
+            .header("forwarded", format!("for={}", addr.ip()))
+    } else {
+        forwarded_req
+    };
 
     forwarded_req
-        .send_json(&(login_info.into_inner()))
-        .map(|response| {})
-        .map_err(error::ErrorInternalServerError)
-    /*
-    web::block(move || {
-        let result = client
-            .post(destination_address)
-            .headers(header_map)
-            .json(&(login_info.into_inner()))
-            .send();
-        match result {
-            Ok(mut response) => {
-                let mut cookie_jar: CookieJar = CookieJar::new();
-                let cookies = response.cookies();
-                cookies.for_each(|cookie| {
-                    let actix_cookie = actix_web::cookie::Cookie::new(
-                        cookie.name().to_owned(),
-                        cookie.value().to_owned(),
-                    );
-                    cookie_jar.add(actix_cookie);
-                });
-                Ok((response.json::<IndexResponse>().unwrap(), cookie_jar))
+        .send()
+        .map(|mut response| {
+            let mut http_response = HttpResponse::build(response.status());
+            // Remove `Connection` as per
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
+            for (header_name, header_value) in response
+                .headers()
+                .iter()
+                .filter(|(h, _)| *h != "connection")
+            {
+                http_response.header(header_name.clone(), header_value.clone());
             }
-            Err(e) => Err(e.to_string()),
-        }
-    })
-    .map(|(data, cookies)| {
-        let mut response_builder = HttpResponse::Ok();
-        cookies.iter().for_each(|cookie| {
-            response_builder.cookie(cookie.to_owned());
-        });
-        response_builder.json(data)
-    })
-    .map_err(error::ErrorInternalServerError)
-    */
+            response
+                .body()
+                .map(|body| Ok(body))
+                .map_err(|error| Err(error))
+        })
+        .flatten()
+        .map_err(Error::from)
+        .map(|a| {})
 }
 
 pub fn logout(
