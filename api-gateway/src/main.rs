@@ -1,10 +1,11 @@
 // Modules
 pub mod auth_service;
 pub mod models;
-pub mod upload_service;
+// pub mod upload_service;
 
 // Crates
 use actix_redis::RedisSession;
+use actix_web::client as awc;
 use actix_web::{middleware, web, App, HttpServer};
 use env_logger;
 use reqwest::{self, Client, ClientBuilder};
@@ -33,7 +34,7 @@ lazy_static::lazy_static! {
 }
 
 pub struct AppState {
-    http_client: Client,
+    http_client: awc::Client,
 }
 
 fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
@@ -71,6 +72,13 @@ fn init_client() -> Client {
     client_builder.build().unwrap()
 }
 
+fn init_actix_client() -> awc::Client {
+    // Client for requests
+    let client_builder: awc::ClientBuilder = awc::ClientBuilder::default();
+
+    client_builder.finish()
+}
+
 fn main() -> io::Result<()> {
     let (address, public_route, redis_host, session_secret) = init();
 
@@ -78,12 +86,14 @@ fn main() -> io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .data(AppState {
-                http_client: init_client(),
+                http_client: init_actix_client(),
             })
             .wrap(RedisSession::new(redis_host.clone(), &session_secret))
             .wrap(middleware::Logger::default())
             .service(
                 web::scope(&(API_ROUTE.parse::<String>().unwrap()))
+                    // Upload service
+                    /*
                     .service(
                         web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to_async(upload_service::upload)),
@@ -92,6 +102,7 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
                     )
+                    */
                     // (only for testing purposes)
                     .service(
                         web::resource("get_session")

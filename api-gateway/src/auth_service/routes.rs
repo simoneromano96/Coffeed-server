@@ -1,7 +1,9 @@
 // Crates
 use crate::AppState;
 use actix_session::Session;
-use actix_web::{cookie::CookieJar, error, web, Error, HttpRequest, HttpResponse, Responder};
+use actix_web::{
+    cookie::CookieJar, error, web, Error, HttpMessage, HttpRequest, HttpResponse, Responder,
+};
 use futures::Future;
 use reqwest::{
     self,
@@ -41,34 +43,45 @@ pub struct LoginInfo {
 
 pub fn login(
     app_state: web::Data<AppState>,
-    login_info: web::Json<LoginInfo>,
+    // login_info: web::Json<LoginInfo>,
+    body: web::Bytes,
     req: HttpRequest,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
-    let destination_address_string: String = format!(
+    let destination_address: String = format!(
         "{}{}{}",
         &AUTH_SERVICE_URL.parse::<String>().unwrap(),
         &API_ROUTE.parse::<String>().unwrap(),
         &LOGIN_ROUTE.parse::<String>().unwrap(),
     );
     // Then Parse it into URL
-    let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
+    // let destination_address: Url = destination_address_string.parse::<Url>().unwrap();
 
     // Get request ip
     let from_address = req.head().peer_addr.unwrap();
 
     // Create headers
-    let mut header_map: HeaderMap = HeaderMap::new();
+    // let mut header_map: HeaderMap = HeaderMap::new();
     // Set forwarded header
-    header_map.append(
-        FORWARDED,
-        HeaderValue::from_str(&from_address.to_string()).unwrap(),
-    );
+    // header_map.append(
+    //    FORWARDED,
+    //    HeaderValue::from_str(&from_address.to_string()).unwrap(),
+    //);
 
+    let forwarded_req = client
+        .request_from(destination_address, req.head())
+        .header("forwarded", format!("{}", from_address.ip()))
+        .no_decompress();
+
+    forwarded_req
+        .send_json(&(login_info.into_inner()))
+        .map(|response| {})
+        .map_err(error::ErrorInternalServerError)
+    /*
     web::block(move || {
-        let result: Result<reqwest::Response, reqwest::Error> = client
+        let result = client
             .post(destination_address)
             .headers(header_map)
             .json(&(login_info.into_inner()))
@@ -97,6 +110,7 @@ pub fn login(
         response_builder.json(data)
     })
     .map_err(error::ErrorInternalServerError)
+    */
 }
 
 pub fn logout(
@@ -118,6 +132,9 @@ pub fn logout(
     // Get request ip
     let from_address = req.head().peer_addr.unwrap();
 
+    // Get request cookie
+    // let actix_session_cookie = req.cookie("actix-session").unwrap();
+
     // Create headers
     let mut header_map: HeaderMap = HeaderMap::new();
 
@@ -126,6 +143,12 @@ pub fn logout(
         FORWARDED,
         HeaderValue::from_str(&from_address.to_string()).unwrap(),
     );
+    /*
+    header_map.append(
+        "actix-session",
+        HeaderValue::from_str(actix_session_cookie.name()).unwrap(),
+    );
+    */
 
     web::block(move || {
         let result: Result<reqwest::Response, reqwest::Error> =
@@ -140,6 +163,7 @@ pub fn logout(
                         cookie.name().to_owned(),
                         cookie.value().to_owned(),
                     );
+                    actix_cookie.set_expires(cookie.expires().unwrap());
                     cookie_jar.add(actix_cookie);
                 });
 
