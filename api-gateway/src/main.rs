@@ -1,14 +1,14 @@
 // Modules
 pub mod auth_service;
 pub mod models;
-// pub mod upload_service;
+pub mod upload_service;
 
 // Crates
 use actix_redis::RedisSession;
-use actix_web::client as awc;
+use actix_web::{client as awc, Error, HttpRequest, HttpResponse};
 use actix_web::{middleware, web, App, HttpServer};
 use env_logger;
-// use reqwest::{self, Client, ClientBuilder};
+use futures::{Future, Stream};
 use std::{env, io, net::SocketAddrV4};
 
 // Evaluate env vars only once
@@ -38,6 +38,44 @@ pub struct AppState {
     http_client: awc::Client,
 }
 
+pub fn forward_to(
+    destination_address: String,
+    client: awc::Client,
+    body: web::Bytes,
+    req: HttpRequest,
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    // Create a new request
+    let forwarded_req = client
+        .request_from(destination_address, req.head())
+        .no_decompress();
+    // Add headers
+    let forwarded_req = if let Some(addr) = req.head().peer_addr {
+        forwarded_req
+            .header("x-forwarded-for", format!("{}", addr.ip()))
+            .header("forwarded", format!("for={}", addr.ip()))
+    } else {
+        forwarded_req
+    };
+
+    forwarded_req
+        .send_body(body)
+        .map_err(Error::from)
+        .map(|mut res| {
+            let mut client_resp = HttpResponse::build(res.status());
+            // Remove `Connection` as per
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
+            for (header_name, header_value) in res.headers().iter() {
+                client_resp.header(header_name.clone(), header_value.clone());
+            }
+            res.body()
+                .into_stream()
+                .concat2()
+                .map(move |b| client_resp.body(b))
+                .map_err(|e| e.into())
+        })
+        .flatten()
+}
+
 fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse().unwrap();
@@ -62,23 +100,9 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
     )
 }
 
-/*
-fn init_client() -> Client {
-    // Client for requests
-    // TODO: Custom http client
-    let client_builder: ClientBuilder = ClientBuilder::new()
-        .use_rustls_tls()
-        .gzip(true)
-        .cookie_store(false);
-
-    client_builder.build().unwrap()
-}
-*/
-
 fn init_actix_client() -> awc::Client {
     // Client for requests
     let client_builder: awc::ClientBuilder = awc::ClientBuilder::default();
-
     client_builder.finish()
 }
 
@@ -102,7 +126,6 @@ fn main() -> io::Result<()> {
             .service(
                 web::scope(&(API_ROUTE.parse::<String>().unwrap()))
                     // Upload service
-                    /*
                     .service(
                         web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
                             .route(web::post().to_async(upload_service::upload)),
@@ -111,7 +134,6 @@ fn main() -> io::Result<()> {
                         web::resource(&public_route)
                             .route(web::get().to_async(upload_service::public_files)),
                     )
-                    */
                     // (only for testing purposes)
                     .service(
                         web::resource("get_session")

@@ -11,4 +11,4 @@ EXPOSE 80
 
 RUN export PATH=/bin/cargo/bin/:$PATH
 
-CMD ["cargo-watch", "--ignore public" ,"-x 'run'"]
+CMD ["cargo-watch", "-x 'run'"]

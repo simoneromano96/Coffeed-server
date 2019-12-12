@@ -1,10 +1,8 @@
 // Crates
-use crate::AppState;
+use crate::{forward_to, AppState};
 use actix_session::Session;
-use actix_web::client as awc;
-use actix_web::http::{HeaderMap, HeaderName, HeaderValue};
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder};
-use futures::{Future, Stream};
+use futures::Future;
 use serde_derive::{Deserialize, Serialize};
 use std::env;
 
@@ -34,44 +32,6 @@ pub struct SessionInfo {
 pub struct LoginInfo {
     email: String,
     password: String,
-}
-
-fn forward_to(
-    destination_address: String,
-    client: awc::Client,
-    body: web::Bytes,
-    req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
-    // Create a new request
-    let forwarded_req = client
-        .request_from(destination_address, req.head())
-        .no_decompress();
-    // Add headers
-    let forwarded_req = if let Some(addr) = req.head().peer_addr {
-        forwarded_req
-            .header("x-forwarded-for", format!("{}", addr.ip()))
-            .header("forwarded", format!("for={}", addr.ip()))
-    } else {
-        forwarded_req
-    };
-
-    forwarded_req
-        .send_body(body)
-        .map_err(Error::from)
-        .map(|mut res| {
-            let mut client_resp = HttpResponse::build(res.status());
-            // Remove `Connection` as per
-            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
-            for (header_name, header_value) in res.headers().iter() {
-                client_resp.header(header_name.clone(), header_value.clone());
-            }
-            res.body()
-                .into_stream()
-                .concat2()
-                .map(move |b| client_resp.body(b))
-                .map_err(|e| e.into())
-        })
-        .flatten()
 }
 
 pub fn login(
