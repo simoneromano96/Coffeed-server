@@ -110,8 +110,15 @@ pub fn logout(
 }
 
 pub fn get_session(session: Session) -> impl Responder {
-    let user_id = session.get::<String>("user_id").unwrap().unwrap();
-    let user_type = session.get::<String>("user_type").unwrap().unwrap();
+    let user_id = session.get::<String>("user_id").unwrap();
+    let user_type = session.get::<String>("user_type").unwrap();
 
-    HttpResponse::Ok().json(SessionInfo { user_id, user_type })
+    if user_id.is_some() && user_type.is_some() {
+        HttpResponse::Ok().json(SessionInfo {
+            user_id: user_id.unwrap(),
+            user_type: user_type.unwrap(),
+        })
+    } else {
+        HttpResponse::Forbidden().json("Please authenticate")
+    }
 }

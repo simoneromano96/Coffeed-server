@@ -27,10 +27,11 @@ lazy_static::lazy_static! {
     pub static ref AUTH_SERVICE_URL: String = env::var("AUTH_SERVICE_URL").unwrap();
     pub static ref LOGIN_ROUTE: String = env::var("LOGIN_ROUTE").unwrap();
     pub static ref LOGOUT_ROUTE: String = env::var("LOGOUT_ROUTE").unwrap();
-    // Redis
+    // Session
     pub static ref REDIS_HOST: String = std::env::var("REDIS_HOST").unwrap();
     pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
     pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
+    pub static ref SESSION_COOKIE_NAME: String = std::env::var("SESSION_COOKIE_NAME").unwrap();
 }
 
 pub struct AppState {
@@ -90,7 +91,13 @@ fn main() -> io::Result<()> {
             .data(AppState {
                 http_client: init_actix_client(),
             })
-            .wrap(RedisSession::new(redis_host.clone(), &session_secret))
+            .wrap(
+                RedisSession::new(redis_host.clone(), &session_secret)
+                    // .cookie_name("session-cookie")
+                    .cookie_name(&SESSION_COOKIE_NAME)
+                    .cookie_secure(false)
+                    .cookie_path("/api"),
+            )
             .wrap(middleware::Logger::default())
             .service(
                 web::scope(&(API_ROUTE.parse::<String>().unwrap()))
