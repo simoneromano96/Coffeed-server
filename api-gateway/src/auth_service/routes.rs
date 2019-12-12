@@ -2,9 +2,8 @@
 use crate::AppState;
 use actix_session::Session;
 use actix_web::client as awc;
-use actix_web::{
-    cookie::CookieJar, error, web, Error, HttpMessage, HttpRequest, HttpResponse, Responder,
-};
+use actix_web::http::{HeaderMap, HeaderName, HeaderValue};
+use actix_web::{web, Error, HttpRequest, HttpResponse, Responder};
 use futures::{Future, Stream};
 use serde_derive::{Deserialize, Serialize};
 use std::env;
@@ -63,9 +62,7 @@ fn forward_to(
             let mut client_resp = HttpResponse::build(res.status());
             // Remove `Connection` as per
             // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
-            for (header_name, header_value) in
-                res.headers().iter().filter(|(h, _)| *h != "connection")
-            {
+            for (header_name, header_value) in res.headers().iter() {
                 client_resp.header(header_name.clone(), header_value.clone());
             }
             res.body()

@@ -312,7 +312,10 @@ fn main() -> io::Result<()> {
             })
             .wrap(
                 RedisSession::new(redis_host.clone(), &session_secret)
-                    .cookie_name(&SESSION_COOKIE_NAME),
+                    // .cookie_name("session-cookie")
+                    .cookie_name(&SESSION_COOKIE_NAME)
+                    .cookie_secure(false)
+                    .cookie_path("/api"),
             )
             .wrap(Compress::default())
             .wrap(middleware::Logger::default())
