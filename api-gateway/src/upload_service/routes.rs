@@ -63,7 +63,7 @@ pub fn upload(
 
 pub fn public_files(
     app_state: web::Data<AppState>,
-    body: web::Bytes,
+    body: web::Payload,
     req: HttpRequest,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     // Get client
@@ -77,5 +77,41 @@ pub fn public_files(
         &UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
         &path.parse::<String>().unwrap(),
     );
-    forward_to(destination_address, client, body, req)
+    // forward_to(destination_address, client, body, req)
+    println!("API GATEWAY - UPLOAD SERVICE - PUBLIC FILES - CREATE REQUEST");
+
+    // Create a new request
+    let forwarded_req = client
+        .request_from(destination_address, req.head())
+        .no_decompress();
+    // Add headers
+    let forwarded_req = if let Some(addr) = req.head().peer_addr {
+        forwarded_req
+            .header("x-forwarded-for", format!("{}", addr.ip()))
+            .header("forwarded", format!("for={}", addr.ip()))
+    } else {
+        forwarded_req
+    };
+
+    forwarded_req
+        .send_stream(body)
+        .map_err(Error::from)
+        .map(|mut res| {
+            let mut client_resp = HttpResponse::build(res.status());
+            // Remove `Connection` as per
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
+            for (header_name, header_value) in res.headers().iter() {
+                client_resp.header(header_name.clone(), header_value.clone());
+            }
+            // This is ok
+            // client_resp.json("Hello")
+
+            res.body()
+                .limit(usize::max_value())
+                .into_stream()
+                .concat2()
+                .map(move |bytes| client_resp.body(bytes))
+                .map_err(|e| e.into())
+        })
+        .flatten()
 }

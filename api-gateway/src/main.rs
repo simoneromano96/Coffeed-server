@@ -7,6 +7,7 @@ pub mod upload_service;
 use actix_redis::RedisSession;
 use actix_web::{client as awc, Error, HttpRequest, HttpResponse};
 use actix_web::{middleware, web, App, HttpServer};
+use core::time::Duration;
 use env_logger;
 use futures::{Future, Stream};
 use std::{env, io, net::SocketAddrV4};
@@ -101,9 +102,14 @@ fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
 }
 
 fn init_actix_client() -> awc::Client {
-    // Client for requests
+    // Client builder
     let client_builder: awc::ClientBuilder = awc::ClientBuilder::default();
-    client_builder.finish()
+    // Params
+    // Set timeout to 3 minutes
+    let timeout: Duration = Duration::from_secs(180);
+    // End params
+
+    client_builder.timeout(timeout).finish()
 }
 
 fn main() -> io::Result<()> {
