@@ -9,7 +9,6 @@ use actix_web::{client as awc, Error, HttpRequest, HttpResponse};
 use actix_web::{middleware, web, App, HttpServer};
 use core::time::Duration;
 use env_logger;
-use futures::{Future, Stream};
 use std::{env, io, net::SocketAddrV4};
 
 // Evaluate env vars only once
@@ -39,12 +38,12 @@ pub struct AppState {
     http_client: awc::Client,
 }
 
-pub fn forward_to(
+pub async fn forward_to(
     destination_address: String,
     client: awc::Client,
-    body: web::Bytes,
+    body: web::Payload,
     req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> Result<HttpResponse, Error> {
     // Create a new request
     let forwarded_req = client
         .request_from(destination_address, req.head())
@@ -58,23 +57,21 @@ pub fn forward_to(
         forwarded_req
     };
 
-    forwarded_req
-        .send_body(body)
-        .map_err(Error::from)
-        .map(|mut res| {
-            let mut client_resp = HttpResponse::build(res.status());
-            // Remove `Connection` as per
-            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
-            for (header_name, header_value) in res.headers().iter() {
-                client_resp.header(header_name.clone(), header_value.clone());
-            }
-            res.body()
-                .into_stream()
-                .concat2()
-                .map(move |b| client_resp.body(b))
-                .map_err(|e| e.into())
-        })
-        .flatten()
+    // Get response
+    let mut res = forwarded_req.send_stream(body).await.map_err(Error::from)?;
+
+    // Create response
+    let mut client_resp = HttpResponse::build(res.status());
+
+    // Remove `Connection` as per
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
+    for (header_name, header_value) in res.headers().iter().filter(|(h, _)| *h != "connection") {
+        client_resp.header(header_name.clone(), header_value.clone());
+    }
+
+    let body = res.body().limit(usize::max_value()).await?;
+
+    Ok(client_resp.body(body).await?)
 }
 
 fn init() -> (SocketAddrV4, String, String, Vec<u8>) {
@@ -112,7 +109,8 @@ fn init_actix_client() -> awc::Client {
     client_builder.timeout(timeout).finish()
 }
 
-fn main() -> io::Result<()> {
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
     let (address, public_route, redis_host, session_secret) = init();
 
     // Start http server
@@ -134,11 +132,11 @@ fn main() -> io::Result<()> {
                     // Upload service
                     .service(
                         web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to_async(upload_service::upload)),
+                            .route(web::post().to(upload_service::upload)),
                     )
                     .service(
                         web::resource(&public_route)
-                            .route(web::get().to_async(upload_service::public_files)),
+                            .route(web::get().to(upload_service::public_files)),
                     )
                     // (only for testing purposes)
                     .service(
@@ -147,14 +145,15 @@ fn main() -> io::Result<()> {
                     )
                     .service(
                         web::resource(&(LOGIN_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to_async(auth_service::login)),
+                            .route(web::post().to(auth_service::login)),
                     )
                     .service(
                         web::resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
-                            .route(web::post().to_async(auth_service::logout)),
+                            .route(web::post().to(auth_service::logout)),
                     ),
             )
     })
     .bind(address)?
-    .run()
+    .start()
+    .await
 }

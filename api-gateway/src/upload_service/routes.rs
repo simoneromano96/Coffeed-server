@@ -1,6 +1,5 @@
 use crate::{forward_to, AppState};
-use actix_web::{http::Uri, web, web::Bytes, Error, HttpRequest, HttpResponse};
-use futures::{Future, Stream};
+use actix_web::{http::Uri, web, Error, HttpRequest, HttpResponse};
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
@@ -11,11 +10,11 @@ lazy_static::lazy_static! {
     pub static ref UPLOAD_ROUTE: String = std::env::var("UPLOAD_ROUTE").unwrap();
 }
 
-pub fn upload(
+pub async fn upload(
     app_state: web::Data<AppState>,
     body: web::Payload,
     req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> Result<HttpResponse, Error> {
     // Get client
     let client = app_state.http_client.clone();
 
@@ -27,45 +26,14 @@ pub fn upload(
         &UPLOAD_ROUTE.parse::<String>().unwrap(),
     );
 
-    // forward_to(destination_address, client, body, req)
-
-    // Create a new request
-    let forwarded_req = client
-        .request_from(destination_address, req.head())
-        .no_decompress();
-    // Add headers
-    let forwarded_req = if let Some(addr) = req.head().peer_addr {
-        forwarded_req
-            .header("x-forwarded-for", format!("{}", addr.ip()))
-            .header("forwarded", format!("for={}", addr.ip()))
-    } else {
-        forwarded_req
-    };
-
-    forwarded_req
-        .send_stream(body)
-        .map_err(Error::from)
-        .map(|mut res| {
-            let mut client_resp = HttpResponse::build(res.status());
-            // Remove `Connection` as per
-            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
-            for (header_name, header_value) in res.headers().iter() {
-                client_resp.header(header_name.clone(), header_value.clone());
-            }
-            res.body()
-                .into_stream()
-                .concat2()
-                .map(move |b| client_resp.body(b))
-                .map_err(|e| e.into())
-        })
-        .flatten()
+    forward_to(destination_address, client, body, req).await
 }
 
-pub fn public_files(
+pub async fn public_files(
     app_state: web::Data<AppState>,
     body: web::Payload,
     req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> Result<HttpResponse, Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Path already includes /api
@@ -77,41 +45,6 @@ pub fn public_files(
         &UPLOAD_SERVICE_URL.parse::<String>().unwrap(),
         &path.parse::<String>().unwrap(),
     );
-    // forward_to(destination_address, client, body, req)
-    println!("API GATEWAY - UPLOAD SERVICE - PUBLIC FILES - CREATE REQUEST");
 
-    // Create a new request
-    let forwarded_req = client
-        .request_from(destination_address, req.head())
-        .no_decompress();
-    // Add headers
-    let forwarded_req = if let Some(addr) = req.head().peer_addr {
-        forwarded_req
-            .header("x-forwarded-for", format!("{}", addr.ip()))
-            .header("forwarded", format!("for={}", addr.ip()))
-    } else {
-        forwarded_req
-    };
-
-    forwarded_req
-        .send_stream(body)
-        .map_err(Error::from)
-        .map(|mut res| {
-            let mut client_resp = HttpResponse::build(res.status());
-            // Remove `Connection` as per
-            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
-            for (header_name, header_value) in res.headers().iter() {
-                client_resp.header(header_name.clone(), header_value.clone());
-            }
-            // This is ok
-            // client_resp.json("Hello")
-
-            res.body()
-                .limit(usize::max_value())
-                .into_stream()
-                .concat2()
-                .map(move |bytes| client_resp.body(bytes))
-                .map_err(|e| e.into())
-        })
-        .flatten()
+    forward_to(destination_address, client, body, req).await
 }

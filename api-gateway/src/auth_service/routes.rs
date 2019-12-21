@@ -1,9 +1,8 @@
 // Crates
 use crate::{forward_to, AppState};
 use actix_session::Session;
-use actix_web::{web, Error, HttpRequest, HttpResponse, Responder};
-use futures::Future;
-use serde_derive::{Deserialize, Serialize};
+use actix_web::{error, web, Error, HttpRequest, HttpResponse};
+use serde::{Deserialize, Serialize};
 use std::env;
 
 // Evaluate env vars only once
@@ -34,12 +33,12 @@ pub struct LoginInfo {
     password: String,
 }
 
-pub fn login(
+pub async fn login(
     app_state: web::Data<AppState>,
     // login_info: web::Json<LoginInfo>,
-    body: web::Bytes,
+    body: web::Payload,
     req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> Result<HttpResponse, Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
@@ -49,14 +48,15 @@ pub fn login(
         &API_ROUTE.parse::<String>().unwrap(),
         &LOGIN_ROUTE.parse::<String>().unwrap(),
     );
-    forward_to(destination_address, client, body, req)
+
+    forward_to(destination_address, client, body, req).await
 }
 
-pub fn logout(
+pub async fn logout(
     app_state: web::Data<AppState>,
-    body: web::Bytes,
+    body: web::Payload,
     req: HttpRequest,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> Result<HttpResponse, Error> {
     // Get client
     let client = app_state.http_client.clone();
     // Create url string
@@ -66,19 +66,22 @@ pub fn logout(
         &API_ROUTE.parse::<String>().unwrap(),
         &LOGOUT_ROUTE.parse::<String>().unwrap(),
     );
-    forward_to(destination_address, client, body, req)
+
+    forward_to(destination_address, client, body, req).await
 }
 
-pub fn get_session(session: Session) -> impl Responder {
-    let user_id = session.get::<String>("user_id").unwrap();
-    let user_type = session.get::<String>("user_type").unwrap();
+pub async fn get_session(session: Session) -> Result<HttpResponse, Error> {
+    let user_id = session.get::<String>("user_id")?;
+    let user_type = session.get::<String>("user_type")?;
 
     if user_id.is_some() && user_type.is_some() {
-        HttpResponse::Ok().json(SessionInfo {
-            user_id: user_id.unwrap(),
-            user_type: user_type.unwrap(),
-        })
+        HttpResponse::Ok()
+            .json(SessionInfo {
+                user_id: user_id.unwrap(),
+                user_type: user_type.unwrap(),
+            })
+            .await
     } else {
-        HttpResponse::Forbidden().json("Please authenticate")
+        Err(error::ErrorForbidden("Please authenticate"))
     }
 }
