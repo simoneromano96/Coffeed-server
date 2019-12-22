@@ -1,40 +1,33 @@
 version: "3.6"
 
 services:
-  # TODO: Create an alpine dockerimage
-  mongo:
-    image: mongo
+  # MYSQL
+  mysql:
+    image: mariadb
     restart: unless-stopped
+    expose:
+      - 3306
     environment:
-      MONGO_INITDB_ROOT_USERNAME: username
-      MONGO_INITDB_ROOT_PASSWORD: password
-    ports:
-      - 27017:27017
+      # MYSQL_ROOT_PASSWORD: example
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: coffeed
+      MYSQL_USER: username
+      MYSQL_PASSWORD: password
     volumes:
-      - mongo_data:/data/db
+      - mysql_data:/var/lib/mysql
     networks:
       - coffeed-network
 
-  # TODO: Switch to custom alpine nosqlclient (ex-mongoclient) (url: https://hub.docker.com/r/mongoclient/mongoclient/dockerfile)
-  # mongo-express:
-  #   image: mongo-express
-  #   restart: unless-stopped
-  #   ports:
-  #     - 8099:8081
-  #   environment:
-  #     ME_CONFIG_MONGODB_ADMINUSERNAME: username
-  #     ME_CONFIG_MONGODB_ADMINPASSWORD: password
-
-  mongoclient:
-    image: mongoclient/mongoclient
-    restart: unless-stopped
-    ports: 
-      - 3000:3000
+  # Database GUI
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 801:8080
     networks:
       - coffeed-network
-    volumes: 
-      - mongoclient:/data/db
 
+  # Redis
   redis:
     image: redis
     restart: unless-stopped
@@ -45,6 +38,7 @@ services:
     networks:
       - coffeed-network
 
+  # Rust Microservices
   upload-service:
     build:
       context: ./upload-service
@@ -79,6 +73,8 @@ services:
       context: ./auth-service
       dockerfile: .docker/auth-service.dev.dockerfile
     user: root
+    depends_on:
+      - mysql
     ports:
       - 8082:80
     env_file:
@@ -92,6 +88,5 @@ networks:
   coffeed-network:
 
 volumes:
-  mongo_data:
   redis_data:
-  mongoclient:
+  mysql_data:

@@ -9,7 +9,7 @@ use actix_web::{client as awc, Error, HttpRequest, HttpResponse};
 use actix_web::{middleware, web, App, HttpServer};
 use core::time::Duration;
 use env_logger;
-use std::{env, io, net::SocketAddrV4};
+use std::{env, net::SocketAddrV4};
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
@@ -121,7 +121,6 @@ async fn main() -> std::io::Result<()> {
             })
             .wrap(
                 RedisSession::new(redis_host.clone(), &session_secret)
-                    // .cookie_name("session-cookie")
                     .cookie_name(&SESSION_COOKIE_NAME)
                     .cookie_secure(false)
                     .cookie_path("/api"),

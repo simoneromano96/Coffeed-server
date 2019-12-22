@@ -1,10 +1,6 @@
-//! Example of login and logout using redis-based sessions
-//!
-//! Every request gets a session, corresponding to a cache entry and cookie.
-//! At login, the session key changes and session state in cache re-assigns.
-//! At logout, session state in cache is removed and cookie is invalidated.
 // Modules
 // mod graphql;
+mod migrations;
 
 // Crates
 use actix_redis::RedisSession;
@@ -14,16 +10,16 @@ use actix_web::{
     middleware::Compress,
     web,
     web::{post, resource, scope},
-    App, HttpResponse, HttpServer, Result,
+    App, Error, HttpResponse, HttpServer, Result,
 };
 use argonautica::{Hasher, Verifier};
-use mongodb::{
-    bson, coll::options::IndexOptions, coll::Collection, db::ThreadedDatabase, doc, Client,
-    ThreadedClient,
-};
+use mysql::OptsBuilder;
 use nanoid;
+use r2d2::Pool;
+use r2d2_mysql::MysqlConnectionManager;
+use refinery::Runner;
 use serde::{Deserialize, Serialize};
-use std::{io, net::SocketAddrV4};
+use std::net::SocketAddrV4;
 
 // Evaluate env vars only once
 lazy_static::lazy_static! {
@@ -40,20 +36,22 @@ lazy_static::lazy_static! {
     pub static ref REDIS_PORT: String = std::env::var("REDIS_PORT").unwrap();
     pub static ref SESSION_SECRET: String = std::env::var("SESSION_SECRET").unwrap();
     pub static ref SESSION_COOKIE_NAME: String = std::env::var("SESSION_COOKIE_NAME").unwrap();
-    // Mongodb
-    pub static ref MONGODB_HOST: String = std::env::var("MONGODB_HOST").unwrap();
-    pub static ref MONGODB_PORT: String = std::env::var("MONGODB_PORT").unwrap();
-    pub static ref MONGODB_AUTH_DB: String = std::env::var("MONGODB_AUTH_DB").unwrap();
-    pub static ref MONGODB_AUTH_USERNAME: String = std::env::var("MONGODB_AUTH_USERNAME").unwrap();
-    pub static ref MONGODB_AUTH_PASSWORD: String = std::env::var("MONGODB_AUTH_PASSWORD").unwrap();
+    // MySQL
+    pub static ref MYSQL_HOST: String = std::env::var("MYSQL_HOST").unwrap();
+    pub static ref MYSQL_PORT: String = std::env::var("MYSQL_PORT").unwrap();
+    pub static ref MYSQL_DATABASE: String = std::env::var("MYSQL_DATABASE").unwrap();
+    pub static ref MYSQL_AUTH_USERNAME: String = std::env::var("MYSQL_AUTH_USERNAME").unwrap();
+    pub static ref MYSQL_AUTH_PASSWORD: String = std::env::var("MYSQL_AUTH_PASSWORD").unwrap();
     // NanoID
     pub static ref NANOID_LENGTH: String = std::env::var("NANOID_LENGTH").unwrap();
     // Argon hashing key
     pub static ref ARGON2_HASH_SECRET_KEY: String = std::env::var("ARGON2_HASH_SECRET_KEY").unwrap();
 }
 
+pub type MySQLPool = Pool<MysqlConnectionManager>;
+
 pub struct AppState {
-    client: Client,
+    client: MySQLPool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -116,23 +114,24 @@ fn new_id() -> String {
     nanoid::generate(NANOID_LENGTH.parse::<usize>().unwrap())
 }
 
-fn login(
+async fn login(
     session: Session,
     app_state: web::Data<AppState>,
     login_info: web::Json<LoginInfo>,
-) -> Result<HttpResponse> {
+) -> Result<HttpResponse, Error> {
     let client = app_state.client.clone();
 
+    let mut result: Result<HttpResponse> = Ok(HttpResponse::BadRequest().json("Unknown error"));
     // Get the db and collection
-    let collection: Collection = client.db("authService").collection("users");
+    /*
+    let collection: Collection = client.database("authService").collection("users");
 
     let email = &login_info.email;
 
+    // Query the documents in the collection with a filter and an option.
+    let filter = doc! { "email": email };
     // Find user
-    let result_document = collection
-        .find_one(Some(doc! { "email":  email }), None)
-        .unwrap()
-        .unwrap();
+    let result_document = collection.find_one(Some(filter), None).unwrap().unwrap();
 
     // Deserialize the document into a User instance
     let result: User = bson::from_bson(bson::Bson::Document(result_document)).unwrap();
@@ -147,12 +146,15 @@ fn login(
     } else {
         Ok(HttpResponse::BadRequest().json("User not found or wrong password"))
     }
+    */
+
+    result
 }
 
-fn signup(
+async fn signup(
     app_state: web::Data<AppState>,
     signup_info: web::Json<SignupInfo>,
-) -> Result<HttpResponse> {
+) -> Result<HttpResponse, Error> {
     let client = app_state.client.clone();
 
     let mut result: Result<HttpResponse> = Ok(HttpResponse::BadRequest().json("Unknown error"));
@@ -161,7 +163,9 @@ fn signup(
         result = Ok(HttpResponse::BadRequest().json("Passwords don't match"));
     }
 
-    let collection: Collection = client.db("authService").collection("users");
+    result
+    /*
+    let collection: Collection = client.database("authService").collection("users");
 
     let password: String = hash_password(signup_info.password.clone());
 
@@ -187,9 +191,10 @@ fn signup(
     }
 
     result
+    */
 }
 
-fn logout(session: Session) -> Result<HttpResponse> {
+async fn logout(session: Session) -> Result<HttpResponse, Error> {
     let id: Option<String> = session.get("user_id")?;
     if let Some(x) = id {
         session.purge();
@@ -202,30 +207,58 @@ fn logout(session: Session) -> Result<HttpResponse> {
 fn create_db_client(
     host: String,
     port: u16,
-    auth_db: String,
+    main_database: String,
     auth_username: String,
     auth_password: String,
-) -> Client {
-    let client = Client::connect(&host, port).unwrap();
-    // Authenticate
-    client
-        .db(&auth_db)
-        .auth(&auth_username, &auth_password)
-        .unwrap();
+) -> MySQLPool {
+    let mut builder = OptsBuilder::new();
 
-    client
+    builder
+        .ip_or_hostname(Some(host))
+        .tcp_port(port)
+        .db_name(Some(main_database))
+        .user(Some(auth_username))
+        .pass(Some(auth_password));
+
+    let manager = MysqlConnectionManager::new(builder);
+    r2d2::Pool::builder().build(manager).unwrap()
 }
 
-fn init_db(client: Client) {
+fn init_db(
+    host: String,
+    port: u16,
+    main_database: String,
+    auth_username: String,
+    auth_password: String,
+) {
+    use mysql;
+    let mut builder = mysql::OptsBuilder::new();
+
+    builder
+        .ip_or_hostname(Some(host))
+        .tcp_port(port)
+        .db_name(Some(main_database))
+        .user(Some(auth_username))
+        .pass(Some(auth_password));
+
+    let mut connection = mysql::Conn::new(builder).unwrap();
+
+    let migration_runner: Runner = migrations::runner();
+
+    migration_runner.run(&mut connection).unwrap();
+    // migrations::runner().run(&mut connection).unwrap();
     // Create indexes
     // UserTypes
-    let mut collection: Collection = client.db("authService").collection("userTypes");
-    let mut name_index: IndexOptions = IndexOptions::new();
-    name_index.unique = Some(true);
-    collection
-        .create_index(doc! {"name": 1}, Some(name_index))
-        .unwrap();
-    if collection.count(None, None).unwrap() == 0 {
+    /*
+    let mut collection: Collection = client.database("authService").collection("userTypes");
+    let name_index: IndexModel = IndexModel::builder()
+        .keys(doc! {"name": 1})
+        .options(Some(doc! {"unique": true}))
+        .build();
+
+    collection.create_indexes(vec![name_index]).unwrap();
+
+    if collection.count_documents(None, None).unwrap() == 0 {
         let admin_type = UserType {
             id: new_id(),
             name: String::from("Admin"),
@@ -241,21 +274,26 @@ fn init_db(client: Client) {
         }
     }
     // Users
-    collection = client.db("authService").collection("users");
-    let mut email_index: IndexOptions = IndexOptions::new();
-    email_index.unique = Some(true);
-    let mut username_index: IndexOptions = IndexOptions::new();
-    username_index.unique = Some(true);
+    collection = client.database("authService").collection("users");
+
+    let email_index: IndexModel = IndexModel::builder()
+        .keys(doc! {"email": 1})
+        .options(Some(doc! {"unique": true}))
+        .build();
+
+    let username_index: IndexModel = IndexModel::builder()
+        .keys(doc! {"username": 1})
+        .options(Some(doc! {"unique": true}))
+        .build();
+
     collection
-        .create_index(doc! {"email": 1}, Some(email_index))
+        .create_indexes(vec![email_index, username_index])
         .unwrap();
-    collection
-        .create_index(doc! {"username": 1}, Some(username_index))
-        .unwrap();
-    if collection.count(None, None).unwrap() == 0 {
+
+    if collection.count_documents(None, None).unwrap() == 0 {
         let password = hash_password(String::from("password"));
 
-        let user_types = client.db("authService").collection("userTypes");
+        let user_types = client.database("authService").collection("userTypes");
         let user_type_doc = user_types
             .find_one(Some(doc! {"name": "Admin" }), None)
             .unwrap()
@@ -274,9 +312,10 @@ fn init_db(client: Client) {
             collection.insert_one(document, None).unwrap();
         }
     }
+    */
 }
 
-fn init() -> (SocketAddrV4, String, Vec<u8>, Client) {
+fn init() -> (SocketAddrV4, String, Vec<u8>, MySQLPool) {
     // Create a socket address from listen_at
     let address: SocketAddrV4 = LISTEN_AT.parse::<SocketAddrV4>().unwrap();
     // Session
@@ -290,19 +329,26 @@ fn init() -> (SocketAddrV4, String, Vec<u8>, Client) {
     env_logger::init();
     // Connection pool
     let client = create_db_client(
-        MONGODB_HOST.parse().unwrap(),
-        MONGODB_PORT.parse().unwrap(),
-        MONGODB_AUTH_DB.parse().unwrap(),
-        MONGODB_AUTH_USERNAME.parse().unwrap(),
-        MONGODB_AUTH_PASSWORD.parse().unwrap(),
+        MYSQL_HOST.parse().unwrap(),
+        MYSQL_PORT.parse().unwrap(),
+        MYSQL_DATABASE.parse().unwrap(),
+        MYSQL_AUTH_USERNAME.parse().unwrap(),
+        MYSQL_AUTH_PASSWORD.parse().unwrap(),
     );
     // Initialise DB
-    init_db(client.clone());
+    init_db(
+        MYSQL_HOST.parse().unwrap(),
+        MYSQL_PORT.parse().unwrap(),
+        MYSQL_DATABASE.parse().unwrap(),
+        MYSQL_AUTH_USERNAME.parse().unwrap(),
+        MYSQL_AUTH_PASSWORD.parse().unwrap(),
+    );
 
     (address, redis_host, session_secret, client)
 }
 
-fn main() -> io::Result<()> {
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
     let (address, redis_host, session_secret, client) = init();
 
     HttpServer::new(move || {
@@ -312,7 +358,6 @@ fn main() -> io::Result<()> {
             })
             .wrap(
                 RedisSession::new(redis_host.clone(), &session_secret)
-                    // .cookie_name("session-cookie")
                     .cookie_name(&SESSION_COOKIE_NAME)
                     .cookie_secure(false)
                     .cookie_path("/api"),
@@ -327,5 +372,6 @@ fn main() -> io::Result<()> {
             )
     })
     .bind(address)?
-    .run()
+    .start()
+    .await
 }
