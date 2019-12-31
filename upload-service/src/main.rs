@@ -1,10 +1,7 @@
 use actix_multipart::{Field, Multipart, MultipartError};
 use actix_web::http::header::ContentDisposition;
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
-use futures::{
-    future::{err, Either},
-    Future, Stream,
-};
+use futures::StreamExt;
 use lazy_static;
 use nanoid;
 use std::{fs, io::Write, path::PathBuf};
@@ -21,64 +18,42 @@ lazy_static::lazy_static! {
     pub static ref PUBLIC_FOLDER: String = std::env::var("PUBLIC_FOLDER").unwrap();
 }
 
-fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
-    let content_disposition: ContentDisposition =
-        ContentDisposition::from(field.content_disposition().unwrap());
-    let filename: &str = content_disposition.get_filename().unwrap(); // filename.fake.extension
-    let splitted: Vec<&str> = filename.split('.').collect(); // [filename, extension]
-    let file_extension: &str = splitted.last().unwrap(); // extension
-    let uploaded_filename: String = format!("{}.{}", nanoid::simple(), file_extension);
-    // Create url
-    let url: String = format!(
-        "{}{}{}/{}",
-        API_GATEWAY_PUBLIC_URL.to_owned(),
-        API_ROUTE.to_owned(),
-        PUBLIC_ROUTE.to_owned(),
-        uploaded_filename
-    );
-    let file_url: Url = Url::parse(&url).unwrap();
+async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
+    let mut file_paths: Vec<String> = Vec::new();
+    // iterate over multipart stream
+    while let Some(item) = payload.next().await {
+        let mut field = item?;
+        let content_disposition: ContentDisposition =
+            ContentDisposition::from(field.content_disposition().unwrap());
+        let filename: &str = content_disposition.get_filename().unwrap(); // filename.fake.extension
+        let splitted: Vec<&str> = filename.split('.').collect(); // [filename, extension]
+        let file_extension: &str = splitted.last().unwrap(); // extension
+        let uploaded_filename: String = format!("{}.{}", nanoid::simple(), file_extension);
+        // Create url
+        let file_url: String = format!(
+            "{}{}{}/{}",
+            API_GATEWAY_PUBLIC_URL.to_owned(),
+            API_ROUTE.to_owned(),
+            PUBLIC_ROUTE.to_owned(),
+            uploaded_filename
+        );
 
-    // Local filepath
-    let mut file_path: PathBuf = PUBLIC_FOLDER.parse::<PathBuf>().unwrap();
-    file_path.push(uploaded_filename);
-    let file = match fs::File::create(file_path) {
-        Ok(file) => file,
-        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
-    };
-    Either::B(
-        field
-            .fold(file, move |mut file: std::fs::File, bytes| {
-                // fs operations are blocking, we have to execute writes
-                // on threadpool
-                web::block(move || {
-                    file.write_all(bytes.as_ref())
-                        .map_err(|e: std::io::Error| {
-                            println!("file.write_all failed: {:?}", e);
-                            error::PayloadError::Io(e)
-                        })?;
-                    Ok(file)
-                })
-                .map_err(|e: error::BlockingError<MultipartError>| match e {
-                    error::BlockingError::Error(e) => e,
-                    error::BlockingError::Canceled => MultipartError::Incomplete,
-                })
-            })
-            .map(|_| file_url.into_string())
-            .map_err(error::ErrorInternalServerError),
-    )
-}
-
-fn upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
-    multipart
-        .map_err(error::ErrorInternalServerError)
-        .map(|field| save_file(field).into_stream())
-        .flatten()
-        .collect()
-        .map(|filepaths| HttpResponse::Ok().json(filepaths))
-        .map_err(|e| {
-            println!("failed: {}", e);
-            e
-        })
+        // Local filepath
+        let mut file_path: PathBuf = PUBLIC_FOLDER.parse::<PathBuf>()?;
+        file_path.push(uploaded_filename);
+        // File::create is blocking operation, use threadpool
+        let mut file = web::block(|| std::fs::File::create(file_path))
+            .await
+            .unwrap();
+        // Field in turn is stream of *Bytes* object
+        while let Some(chunk) = field.next().await {
+            let data = chunk.unwrap();
+            // filesystem operations are blocking, we have to use threadpool
+            file = web::block(move || file.write_all(&data).map(|_| file)).await?;
+        }
+        file_paths.push(file_url);
+    }
+    Ok(HttpResponse::Ok().json(file_paths))
 }
 
 fn create_public_folder() {
@@ -97,7 +72,8 @@ fn init() {
     env_logger::init();
 }
 
-fn main() -> std::io::Result<()> {
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
     init();
     let address: std::net::SocketAddrV4 = LISTEN_AT.parse().unwrap();
 
@@ -107,13 +83,21 @@ fn main() -> std::io::Result<()> {
             // Group routes by API_ROUTE
             web::scope(&API_ROUTE)
                 // Image upload
-                .service(web::resource(&UPLOAD_ROUTE).route(web::post().to_async(upload)))
+                .service(
+                    web::resource(&(UPLOAD_ROUTE.parse::<String>().unwrap()))
+                        .route(web::post().to(upload)),
+                )
                 // Serve images from public folder
                 .service(
-                    actix_files::Files::new(&PUBLIC_ROUTE, public_folder).show_files_listing(),
+                    actix_files::Files::new(
+                        &(PUBLIC_ROUTE.parse::<String>().unwrap()),
+                        public_folder,
+                    )
+                    .show_files_listing(),
                 ),
         )
     })
     .bind(address)?
     .run()
+    .await
 }
