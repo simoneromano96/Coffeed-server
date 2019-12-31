@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 actix-rt = "^1.0.0"
-actix-web = { version = "2.0.0-rc", features = ["rustls", "compress"] }
+actix-web = { version = "^2.0.0", features = ["rustls", "compress"] }
 url = "^2.1.0"
 # Evaluate env vars only once
 lazy_static="^1.4.0"

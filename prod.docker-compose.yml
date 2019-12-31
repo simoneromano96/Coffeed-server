@@ -1,47 +1,51 @@
 version: "3.6"
 
 services:
-  mongo:
-    image: mongo
+  # MYSQL
+  mysql:
+    image: mariadb
     restart: unless-stopped
-    networks:
-      - api_network
-    ports:
-      - 27017:27017
+    expose:
+      - 3306
     environment:
-      MONGO_INITDB_ROOT_USERNAME: username
-      MONGO_INITDB_ROOT_PASSWORD: password
+      # MYSQL_ROOT_PASSWORD: example
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: coffeed
+      MYSQL_USER: username
+      MYSQL_PASSWORD: password
     volumes:
-      - ./mongo:/data/db
-
-  mongo-express:
-    image: mongo-express
-    restart: unless-stopped
+      - mysql_data:/var/lib/mysql
     networks:
-      - api_network
-    ports:
-      - 8000:8081
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: username
-      ME_CONFIG_MONGODB_ADMINPASSWORD: password
+      - coffeed-network
 
+  # Database GUI
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 801:8080
+    networks:
+      - coffeed-network
+
+  # Redis
   redis:
     image: redis
     restart: unless-stopped
+    expose:
+      - 6379
     networks:
-      - api_network
+      - coffeed-network
 
+  # Rust Microservices
   api-gateway:
     build:
       context: ./api-gateway
       dockerfile: ./.docker/api-gateway.dockerfile
     restart: unless-stopped
     networks:
-      - api_network
+      - coffeed-network
     env_file:
       - ./.env
-    ports:
-      - 8081:80
 
   auth-service:
     build:
@@ -49,11 +53,9 @@ services:
       dockerfile: ./.docker/auth-service.dockerfile
     restart: unless-stopped
     networks:
-      - api_network
+      - coffeed-network
     env_file:
       - ./.env
-    ports:
-      - 8082:80
 
   upload-service:
     build:
@@ -61,11 +63,15 @@ services:
       dockerfile: ./.docker/upload-service.dockerfile
     restart: unless-stopped
     networks:
-      - api_network
+      - coffeed-network
     env_file:
       - ./.env
     volumes:
       - ./public:/upload-service/public
 
 networks:
-  api_network:
+  coffeed-network:
+
+volumes:
+  redis_data:
+  mysql_data:

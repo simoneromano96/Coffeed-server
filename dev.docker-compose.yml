@@ -33,8 +33,6 @@ services:
     restart: unless-stopped
     expose:
       - 6379
-    #ports:
-    #  - 6379:6379
     networks:
       - coffeed-network
 
@@ -47,7 +45,7 @@ services:
     ports:
       - 8080:80
     env_file:
-      - ./.env
+      - ./.env.example
     networks:
       - coffeed-network
     volumes:
@@ -62,7 +60,7 @@ services:
     ports:
       - 8081:80
     env_file:
-      - ./.env
+      - ./.env.example
     networks:
       - coffeed-network
     volumes:
@@ -78,7 +76,7 @@ services:
     ports:
       - 8082:80
     env_file:
-      - ./.env
+      - ./.env.example
     networks:
       - coffeed-network
     volumes:

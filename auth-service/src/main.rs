@@ -372,6 +372,6 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind(address)?
-    .start()
+    .run()
     .await
 }
