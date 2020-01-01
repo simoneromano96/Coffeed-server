@@ -231,7 +231,6 @@ fn init_db(
     auth_username: String,
     auth_password: String,
 ) {
-    use mysql;
     let mut builder = mysql::OptsBuilder::new();
 
     builder
@@ -242,10 +241,27 @@ fn init_db(
         .pass(Some(auth_password));
 
     let mut connection = mysql::Conn::new(builder).unwrap();
+    migrations::migrations::runner()
+        .run(&mut connection)
+        .unwrap();
 
-    let migration_runner: Runner = migrations::runner();
-
-    migration_runner.run(&mut connection).unwrap();
+    let user_types_count_query = r#"
+        select count(*) as count
+        from user_types
+    "#;
+    match connection.prep_exec(user_types_count_query, ()) {
+        Ok(result) => result.map(|row_result| match row_result {
+            Ok(row) => {
+                let (count) = mysql::from_row(row);
+            }
+            Err(err) => {
+                println!("{}", error.to_string());
+            }
+        }),
+        Err(error) => {
+            println!("{}", error.to_string());
+        }
+    };
     // migrations::runner().run(&mut connection).unwrap();
     // Create indexes
     // UserTypes
@@ -366,9 +382,17 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .service(
                 scope(&API_ROUTE)
-                    .service(resource(&LOGIN_ROUTE).route(post().to(login)))
-                    .service(resource(&LOGOUT_ROUTE).route(post().to(logout)))
-                    .service(resource(&SIGNUP_ROUTE).route(post().to(signup))),
+                    .service(
+                        resource(&(LOGIN_ROUTE.parse::<String>().unwrap())).route(post().to(login)),
+                    )
+                    .service(
+                        resource(&(LOGOUT_ROUTE.parse::<String>().unwrap()))
+                            .route(post().to(logout)),
+                    )
+                    .service(
+                        resource(&(SIGNUP_ROUTE.parse::<String>().unwrap()))
+                            .route(post().to(signup)),
+                    ),
             )
     })
     .bind(address)?
